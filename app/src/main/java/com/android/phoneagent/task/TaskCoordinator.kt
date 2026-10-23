@@ -70,6 +70,8 @@ class TaskCoordinator(
     override val busy: StateFlow<Boolean> = _busy
 
     private val lock = Any()
+    private val history = ArrayList<TaskEvent>()
+    override fun history(): List<TaskEvent> = synchronized(history) { history.toList() }
     private var session: Job? = null
     private var pendingAnswer: CompletableDeferred<String>? = null
     private var pendingConfirm: CompletableDeferred<ConfirmChoice>? = null
@@ -80,6 +82,7 @@ class TaskCoordinator(
     override fun submit(text: String): Boolean {
         val t = text.trim()
         if (t.isEmpty()) return false
+        emit(TaskEvent.UserSaid(t))
         synchronized(lock) {
             pendingAnswer?.let { it.complete(t); pendingAnswer = null; return false }
             pendingConfirm?.let { earlyInstruction = t; it.complete(ConfirmChoice.MODIFY); pendingConfirm = null; return false }
@@ -120,8 +123,13 @@ class TaskCoordinator(
     }
 
     private fun emit(e: TaskEvent) {
+        synchronized(history) {
+            history += if (e is TaskEvent.Progress && e.thumb != null) e.copy(thumb = null) else e
+            if (history.size > 400) history.removeAt(0)
+        }
         // 事件摘要写到 logcat（tag PA），自动化测试脚本靠它判断进度
         android.util.Log.i("PA", "TASK " + when (e) {
+            is TaskEvent.UserSaid -> "用户：${e.text}"
             is TaskEvent.AgentSaid -> "说：${e.text}"
             is TaskEvent.Ask -> "问：${e.text} 选项=${e.options}"
             is TaskEvent.Started -> "开始：${e.title}"

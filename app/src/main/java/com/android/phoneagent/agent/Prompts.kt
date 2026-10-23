@@ -177,7 +177,8 @@ ${dateTable(now)}
     val AMAZON_ADD_SECTION = """
 Amazon 购物（Amazon Shopping App）——这一步只做「搜索商品并加入购物车」：
 - 系统通常已经用链接打开了搜索结果页（历史会写明）。在结果里选最符合用户描述的商品（相近的多个且价格差不多时选排在最前、评价好的；描述含糊到无法选择时用 ask_user 问用户）。优先选便宜的、不带 Prime 会员专享/订阅的商品。
-- 点进商品页，如有规格（颜色、尺码）用默认；数量要求大于 1 时，加入购物车后在购物车页调整数量。点「Add to Cart」加入购物车。**绝不点「Buy Now」**。
+- 点进商品页，如有规格（颜色、尺码）用默认；数量要求大于 1 时，加入购物车后在购物车页调整数量。点「Add to Cart」（页面上可能显示成文字「Submit」，id 是 add-to-cart-button）加入购物车。**绝不点「Buy Now」**。
+- **只点一次 Add to cart**：Amazon 加购成功后页面常常看起来没变化，成功的标志是底部「Cart」标签上的数量变多（「Cart 2 items」）。点完一次后不管页面有没有变化，下一步直接点底部「Cart」标签打开购物车确认，不要再点 Add to cart（再点会多加一件）。
 - 加入后出现保修、推荐、会员弹窗：点「No thanks / 不用了 / 关闭」类选项；**绝不点 Try Prime / Join Prime / Submit 订阅**。
 - 然后打开购物车（底部「Cart」标签），在购物车页确认该商品在里面、数量正确（描述里有「Quantity is N」），再 done(success=true)。购物车里已有的其他商品不要动。
 - 商品缺货、加不进购物车：done(success=false) 说明原因。

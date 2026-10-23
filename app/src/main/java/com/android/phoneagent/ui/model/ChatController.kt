@@ -53,6 +53,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     init {
         backend?.let { b ->
+            b.history().forEach { handle(it) }   // 先回放已有的对话（App 被关掉重开、别的入口提交的任务也能看到）
             scope.launch { b.events.collect { handle(it) } }
             scope.launch { b.busy.collect { busy = it } }
         }
@@ -60,6 +61,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     private fun handle(e: TaskEvent) {
         when (e) {
+            is TaskEvent.UserSaid -> add(ChatItem.User(id(), e.text))
             is TaskEvent.AgentSaid -> add(ChatItem.Agent(id(), e.text))
             is TaskEvent.Ask -> {
                 if (e.options.isEmpty()) add(ChatItem.Agent(id(), e.text)) else add(ChatItem.Question(id(), e.text, e.options, null))
@@ -125,11 +127,11 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
     fun submit(text: String) {
         val t = text.trim()
         if (t.isEmpty()) return
-        add(ChatItem.User(id(), t))
         if (backend != null) {
-            if (backend.submit(t)) lastTask = t
+            if (backend.submit(t)) lastTask = t   // 用户气泡由后端的 UserSaid 事件统一添加
             return
         }
+        add(ChatItem.User(id(), t))
         textWaiter?.let { it.complete(t); textWaiter = null; return }
         if (busy) {
             add(ChatItem.Agent(id(), "我还在处理上一件事，你可以先停止它。"))
@@ -169,8 +171,8 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
     fun onOption(questionId: Long, index: Int) {
         replace(questionId) { (it as ChatItem.Question).copy(chosen = index) }
         val q = items.firstOrNull { it.id == questionId } as? ChatItem.Question
-        if (q != null) add(ChatItem.User(id(), q.options[index]))
         if (backend != null) { if (q != null) backend.submit(q.options[index]); return }
+        if (q != null) add(ChatItem.User(id(), q.options[index]))
         optionWaiter?.complete(index); optionWaiter = null
     }
 

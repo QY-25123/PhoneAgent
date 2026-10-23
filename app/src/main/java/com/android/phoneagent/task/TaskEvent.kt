@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** 任务进行中发给界面的事件（界面只依赖这里，不直接碰 agent / privileged）。 */
 sealed interface TaskEvent {
+    /** 用户说的话（不管是对话页输入的，还是别的入口提交的，界面都靠这个事件显示用户气泡） */
+    data class UserSaid(val text: String) : TaskEvent
+
     /** agent 在对话里说一句话（复述、说明、出错原因……） */
     data class AgentSaid(val text: String) : TaskEvent
 
@@ -34,6 +37,9 @@ enum class ConfirmChoice { SEND, MODIFY, CANCEL }
 /** 界面接入真实流程的入口（M2：[TaskCoordinator] 实现）。 */
 interface TaskBackend {
     val events: SharedFlow<TaskEvent>
+
+    /** 到现在为止发生过的事件（进展事件不带缩略图）。界面（重新）创建时先回放它，再订阅 [events]，这样关掉 App 再打开、或别的入口提交的任务，对话里都看得到。 */
+    fun history(): List<TaskEvent>
 
     /** 有任务在澄清或执行 */
     val busy: StateFlow<Boolean>
