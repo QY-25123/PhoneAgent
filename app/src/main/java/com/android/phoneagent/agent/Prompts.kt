@@ -159,7 +159,7 @@ ${dateTable(now)}
     val GMAIL_DISCARD_SECTION = """
 丢弃本次任务创建的 Gmail 草稿：
 - 当前应在 Gmail 写邮件页：点右上角「More options」→「Discard」（丢弃草稿），在确认对话框里确认丢弃。丢弃后写邮件页关闭（屏幕可能变黑，正常）。
-- 写邮件页关闭后 done(success=true)；丢不掉 done(success=false) 说明原因。只准丢弃当前这份草稿，绝不碰别的草稿和邮件。""".trim()
+- 点了确认丢弃、写邮件页关闭（屏幕变黑、或回到收件箱）就是成功：立刻 done(success=true)。**不要自己去核对草稿箱**，草稿箱由后面的步骤单独核对。只有找不到丢弃按钮、对话框点不掉这类真的做不了的情况才 done(success=false)。只准丢弃当前这份草稿，绝不碰别的草稿和邮件。""".trim()
 
     val GMAIL_DRAFTS_SECTION = """
 确认 Gmail 草稿箱里没有本次任务的草稿：

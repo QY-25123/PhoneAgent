@@ -199,8 +199,8 @@ class EmailFlow(
     private suspend fun readDraft(): Draft? = GmailDraft.read(phone.perceive().state)
 
     private suspend fun cancel(draft: Draft): EmailResult {
-        val d = loop().run(DiscardDraftTask(draft.subject))
-        if (d is LoopResult.Failure) return EmailResult.Cancelled(false, "没能丢弃草稿：${d.reason}。草稿「${draft.subject}」可能还在 Gmail 草稿箱里，请手动检查")
+        // 丢弃动作没做成也要继续核对草稿箱：核对步骤会发现并丢弃残留的这份草稿
+        loop().run(DiscardDraftTask(draft.subject))
         val c = loop().run(CheckDraftsTask(draft.subject))
         return when (c) {
             is LoopResult.Success -> EmailResult.Cancelled(true, "草稿已丢弃，草稿箱里没有残留")
