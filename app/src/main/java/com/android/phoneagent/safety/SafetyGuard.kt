@@ -1,4 +1,4 @@
-package com.android.phoneagent.priv
+package com.android.phoneagent.safety
 
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo

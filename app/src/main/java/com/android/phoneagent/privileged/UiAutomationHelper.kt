@@ -1,5 +1,6 @@
-package com.android.phoneagent.priv
+package com.android.phoneagent.privileged
 
+import com.android.phoneagent.safety.SafetyGuard
 import android.app.UiAutomation
 import android.os.Bundle
 import android.os.HandlerThread

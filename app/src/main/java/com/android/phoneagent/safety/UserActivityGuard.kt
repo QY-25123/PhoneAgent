@@ -1,6 +1,7 @@
-package com.android.phoneagent
+package com.android.phoneagent.safety
 
 import android.util.Log
+import com.android.phoneagent.IPrivileged
 import java.util.concurrent.CancellationException
 
 /**

@@ -30,7 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.android.phoneagent.Agent
+import com.android.phoneagent.task.Agent
 
 /**
  * 技术验证用的测试界面（原来的首页）。开发期保留，从「设置 → 开发者调试」进入。

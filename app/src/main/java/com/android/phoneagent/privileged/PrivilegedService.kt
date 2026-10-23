@@ -1,4 +1,4 @@
-package com.android.phoneagent.priv
+package com.android.phoneagent.privileged
 
 import android.os.Process
 import android.view.Surface

@@ -1,4 +1,4 @@
-package com.android.phoneagent.priv
+package com.android.phoneagent.privileged
 
 /** 主屏（display 0）的用户活动状态：软键盘是否显示。 */
 class MainScreenState {

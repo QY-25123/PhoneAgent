@@ -1,4 +1,4 @@
-package com.android.phoneagent
+package com.android.phoneagent.task
 
 import android.content.ComponentName
 import android.content.Context
@@ -16,7 +16,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.android.phoneagent.priv.PrivilegedService
+import com.android.phoneagent.AgentService
+import com.android.phoneagent.FloatingWindow
+import com.android.phoneagent.IPrivileged
+import com.android.phoneagent.privileged.PrivilegedService
+import com.android.phoneagent.safety.UserActivityGuard
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
 
