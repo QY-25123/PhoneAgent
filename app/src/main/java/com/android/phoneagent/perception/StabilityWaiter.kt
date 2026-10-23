@@ -99,17 +99,19 @@ class StabilityWaiter(
         return hasWebView && ext.elements.size < opts.minElementsWithWebView
     }
 
-    /** 元素签名：标识、位置、文字、状态。不含编号（编号随排序变化）。 */
-    internal fun signature(elements: List<UiElement>): String = buildString {
-        for (e in elements) {
-            append(e.stableId).append('@').append(e.bounds.left).append(',').append(e.bounds.top).append(',')
-                .append(e.bounds.right).append(',').append(e.bounds.bottom).append('|')
-                .append(e.text).append('|').append(e.desc).append('|').append(e.mergedText).append('|')
-                .append(e.focused).append(e.checked).append(e.enabled).append('\n')
-        }
-    }
+    private fun signature(elements: List<UiElement>) = signatureOf(elements)
 
-    private companion object {
-        val EMPTY = Extraction(emptyList(), null, null, webViewEmpty = false, truncatedTree = false)
+    companion object {
+        /** 元素签名：标识、位置、文字、状态。不含编号（编号随排序变化）。 */
+        fun signatureOf(elements: List<UiElement>): String = buildString {
+            for (e in elements) {
+                append(e.stableId).append('@').append(e.bounds.left).append(',').append(e.bounds.top).append(',')
+                    .append(e.bounds.right).append(',').append(e.bounds.bottom).append('|')
+                    .append(e.text).append('|').append(e.desc).append('|').append(e.mergedText).append('|')
+                    .append(e.focused).append(e.checked).append(e.enabled).append('\n')
+            }
+        }
+
+        private val EMPTY = Extraction(emptyList(), null, null, webViewEmpty = false, truncatedTree = false)
     }
 }

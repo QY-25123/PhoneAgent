@@ -15,8 +15,10 @@ truth = "1.4.4"
 mockk = "1.13.13"
 coroutines = "1.10.1"
 orgJson = "20240303"
+anthropic = "2.34.0"
 
 [libraries]
+anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }

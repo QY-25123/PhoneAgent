@@ -3,18 +3,38 @@ package com.android.phoneagent.agent
 enum class Direction { UP, DOWN, LEFT, RIGHT }
 
 /**
- * agent 能下达的动作（PRD 6.2）。目标用元素编号，不用坐标；坐标由 perception 按最新 ScreenState 换算，
+ * agent 能下达的动作（PRD 6.2）。目标用元素编号，不用坐标；坐标由 perception 的当前 ScreenState 换算，
  * 换算后的动作必须先经 safety 检查才能执行。
  */
 sealed interface Action {
-    data class Launch(val packageOrComponent: String) : Action
+    /** 只能打开允许的 App（日历 / Gmail / Amazon），名字或包名都行 */
+    data class OpenApp(val app: String) : Action
     data class Tap(val index: Int) : Action
     data class Type(val index: Int, val text: String) : Action
-    data class Scroll(val index: Int?, val direction: Direction) : Action
-    data object Back : Action
-    data class Wait(val ms: Long) : Action
-    data class Ask(val question: String, val options: List<String> = emptyList()) : Action
 
-    /** 只是模型「自称完成」；是否真的完成由 verification 判断。 */
-    data class Finish(val claim: String) : Action
+    /** [direction] 是手指滑动的方向的反面：DOWN ＝ 看到更下面的内容（手指向上滑） */
+    data class Scroll(val direction: Direction, val index: Int? = null) : Action
+    data object Back : Action
+    data object PressEnter : Action
+    data class Wait(val seconds: Int) : Action
+    data class AskUser(val question: String, val options: List<String> = emptyList()) : Action
+
+    /** 模型认为任务结束：[success] 为 false 表示放弃（[result] 写原因）。是否真的完成还要自查。 */
+    data class Done(val success: Boolean, val result: String) : Action
+
+    /** 是否算一步（PRD 6.1：只有实际执行的动作计入步数；等待、询问、结束不计）。 */
+    val countsAsStep: Boolean get() = this !is Wait && this !is AskUser && this !is Done
+
+    /** 给人看的一句话（步骤列表、日志）。 */
+    fun describe(): String = when (this) {
+        is OpenApp -> "打开 $app"
+        is Tap -> "点击 #$index"
+        is Type -> "在 #$index 输入「$text」"
+        is Scroll -> "向${when (direction) { Direction.UP -> "上"; Direction.DOWN -> "下"; Direction.LEFT -> "左"; Direction.RIGHT -> "右" }}滚动"
+        Back -> "返回"
+        PressEnter -> "按回车"
+        is Wait -> "等待 ${seconds} 秒"
+        is AskUser -> "询问：$question"
+        is Done -> if (success) "完成：$result" else "放弃：$result"
+    }
 }

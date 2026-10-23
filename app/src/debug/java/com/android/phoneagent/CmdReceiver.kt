@@ -54,6 +54,23 @@ class CmdReceiver : BroadcastReceiver() {
                     } finally { pending.finish() }
                 }
             }
+            "claudetest" -> {
+                // 连通性测试：一次最小的结构化输出调用（不含任何隐私内容）
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    try {
+                        val r = com.android.phoneagent.agent.ClaudeModelClient(com.android.phoneagent.BuildConfig.CLAUDE_API_KEY).complete(
+                            com.android.phoneagent.agent.ModelRequest(
+                                "test", "只输出 JSON。",
+                                listOf(com.android.phoneagent.agent.ModelMessage("user", "把 12 加 30，结果放进 answer 字段。")),
+                                """{"type":"object","properties":{"answer":{"type":"integer"}},"required":["answer"],"additionalProperties":false}""",
+                            ))
+                        android.util.Log.i("PA", "CLAUDETEST ok json=${r.json} usage=in${r.usage.inputTokens}/out${r.usage.outputTokens} ${r.latencyMs}ms stop=${r.stopReason}")
+                    } catch (e: Throwable) {
+                        android.util.Log.i("PA", "CLAUDETEST 失败: $e / ${e.cause}")
+                    } finally { pending.finish() }
+                }
+            }
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))

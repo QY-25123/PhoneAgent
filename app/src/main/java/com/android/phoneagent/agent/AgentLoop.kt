@@ -1,0 +1,178 @@
+package com.android.phoneagent.agent
+
+import com.android.phoneagent.perception.PerceptionResult
+import com.android.phoneagent.perception.StabilityWaiter
+import kotlinx.coroutines.delay
+import java.time.ZonedDateTime
+
+class LoopConfig(
+    val maxSteps: Int = 30,
+    val maxModelCalls: Int = 60,
+    /** 连续失败（动作执行失败或模型输出不合法）这么多次就停 */
+    val maxConsecutiveFailures: Int = 3,
+    /** 连续这么多步动作之后界面没有变化就停 */
+    val maxUnchanged: Int = 3,
+    val historyWindow: Int = 6,
+    val maxSelfCheckFailures: Int = 2,
+)
+
+enum class StopKind { MODEL_GAVE_UP, STEP_LIMIT, CALL_LIMIT, REPEATED_FAILURE, NO_CHANGE, MODEL_ERROR, BLOCKED, SELF_CHECK_FAILED }
+
+sealed interface LoopResult {
+    val steps: Int
+    val modelCalls: Int
+
+    data class Success(val summary: String, val evidence: String, override val steps: Int, override val modelCalls: Int) : LoopResult
+    data class Failure(
+        val kind: StopKind, val reason: String, val leftovers: List<String>,
+        override val steps: Int, override val modelCalls: Int,
+    ) : LoopResult
+}
+
+/** 给界面的一步进展。[number] 只给计入步数的动作（PRD FR-LOOP-2）。 */
+class StepInfo(val number: Int?, val saw: String, val did: String, val screen: PerceptionResult)
+
+interface LoopHost {
+    fun onStep(info: StepInfo)
+
+    /** ask_user：在对话里问用户，等回答。不计步数。 */
+    suspend fun askUser(question: String, options: List<String>): String
+}
+
+/**
+ * 执行循环（PRD 6.1）：感知 → 调用 Claude → 一个动作 → 执行（安全检查在 [PhoneController] 里）→ 重新感知。
+ * 停止条件：done（并通过自查）、30 步、60 次模型调用、连续 3 次失败、连续 3 步界面无变化。
+ * 用户停止靠协程取消。
+ */
+class AgentLoop(
+    private val model: ModelClient,
+    private val phone: PhoneController,
+    private val host: LoopHost,
+    private val cfg: LoopConfig = LoopConfig(),
+    private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
+    private val log: RunLog = NoopRunLog,
+    private val sleep: suspend (Long) -> Unit = { delay(it) },
+) {
+    suspend fun run(task: CalendarTask): LoopResult {
+        val taskText = "在 Google 日历里创建事项「${task.title}」"
+        val confirmed = task.confirmedFields()
+        val leftovers = listOf("日历里可能留有标题为「${task.title}」的事项或没保存的新建页，请检查")
+        val history = ArrayList<Prompts.HistoryItem>()
+        var steps = 0
+        var calls = 0
+        var failures = 0
+        var unchanged = 0
+        var selfCheckFailures = 0
+        var sigBeforeAction: String? = null
+        val t0 = System.nanoTime()
+
+        fun fail(kind: StopKind, reason: String): LoopResult {
+            log.finish("失败（$kind）：$reason", steps, calls, (System.nanoTime() - t0) / 1_000_000)
+            return LoopResult.Failure(kind, reason, leftovers, steps, calls)
+        }
+
+        val pre = phone.launchCalendarInsert(task)
+        history += if (pre.ok) Prompts.HistoryItem(null, "", "用「插入事项」意图在虚拟屏打开了日历新建页并预填标题和起止时间", "成功")
+        else Prompts.HistoryItem(null, "", "尝试用「插入事项」意图打开新建页", "失败（${pre.message}）：改用界面操作，从 open_app calendar 开始")
+
+        while (true) {
+            if (steps >= cfg.maxSteps) return fail(StopKind.STEP_LIMIT, "已经执行了 ${cfg.maxSteps} 步还没完成，我先停下了")
+            if (calls >= cfg.maxModelCalls) return fail(StopKind.CALL_LIMIT, "这次任务的模型调用已经用到上限（${cfg.maxModelCalls} 次），我先停下了")
+
+            val screen = phone.perceive()
+            val sig = signature(screen)
+            if (sigBeforeAction != null) {
+                unchanged = if (sig == sigBeforeAction) unchanged + 1 else 0
+                sigBeforeAction = null
+                if (unchanged >= cfg.maxUnchanged) {
+                    log.step(steps, screen, null, null, "连续 $unchanged 步界面没有变化")
+                    return fail(StopKind.NO_CHANGE, "连续 ${cfg.maxUnchanged} 步操作之后界面都没有变化，我先停下了")
+                }
+            }
+
+            val req = ModelRequest(
+                label = "step",
+                system = Prompts.STEP_SYSTEM,
+                messages = listOf(ModelMessage("user",
+                    Prompts.stepUser(taskText, confirmed, clock(), history.takeLast(cfg.historyWindow), screen.text, steps, cfg.maxSteps),
+                    listOfNotNull(screen.state.screenshotJpeg))),
+                schemaJson = Schemas.STEP,
+                maxTokens = 1200,
+                effort = "low",
+            )
+            calls++
+            val resp = try {
+                model.complete(req).also { log.modelCall(req, it, null) }
+            } catch (e: ModelException) {
+                log.modelCall(req, null, e.message)
+                log.step(steps, screen, null, null, "模型调用失败：${e.message}")
+                return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败")
+            }
+            val decision = try { StepDecision.parse(resp.json) } catch (e: ModelException) {
+                failures++
+                history += Prompts.HistoryItem(null, "", "（上一步输出格式不对：${e.message}）", "未执行")
+                log.step(steps, screen, null, null, "输出不合法：${e.message}")
+                if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "模型连续 $failures 次给出了无法执行的回复，我先停下了")
+                continue
+            }
+            val a = decision.action
+
+            when (a) {
+                is Action.Done -> {
+                    log.step(steps, screen, decision, null)
+                    if (!a.success) return fail(StopKind.MODEL_GAVE_UP, a.result.ifBlank { "没能完成这件事" })
+                    // 自查：只看界面上实际看到的内容
+                    calls++
+                    val vreq = ModelRequest(
+                        "verify", Prompts.VERIFY_SYSTEM,
+                        listOf(ModelMessage("user", Prompts.verifyUser(taskText, confirmed, a.result, screen.text), listOfNotNull(screen.state.screenshotJpeg))),
+                        Schemas.VERIFY, 600, "low",
+                    )
+                    val vresp = try { model.complete(vreq).also { log.modelCall(vreq, it, null) } } catch (e: ModelException) {
+                        log.modelCall(vreq, null, e.message)
+                        return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败")
+                    }
+                    val v = try { org.json.JSONObject(vresp.json) } catch (e: Exception) { null }
+                    if (v != null && v.optBoolean("verified")) {
+                        log.finish("成功：${a.result}", steps, calls, (System.nanoTime() - t0) / 1_000_000)
+                        return LoopResult.Success(a.result, v.optString("evidence"), steps, calls)
+                    }
+                    selfCheckFailures++
+                    val problem = v?.takeIf { !it.isNull("problem") }?.optString("problem") ?: "自查没有通过"
+                    history += Prompts.HistoryItem(null, decision.understanding, "声称已完成：${a.result}", "自查未通过：$problem")
+                    if (selfCheckFailures >= cfg.maxSelfCheckFailures) return fail(StopKind.SELF_CHECK_FAILED, "没能确认事项已经创建：$problem")
+                }
+
+                is Action.AskUser -> {
+                    log.step(steps, screen, decision, null)
+                    host.onStep(StepInfo(null, decision.understanding, a.describe(), screen))
+                    val answer = host.askUser(a.question, a.options)
+                    history += Prompts.HistoryItem(null, decision.understanding, "询问用户：${a.question}", "用户回答：$answer")
+                }
+
+                is Action.Wait -> {
+                    log.step(steps, screen, decision, null)
+                    host.onStep(StepInfo(null, decision.understanding, a.describe(), screen))
+                    sleep(a.seconds * 1000L)
+                    history += Prompts.HistoryItem(null, decision.understanding, a.describe(), "已等待")
+                }
+
+                else -> {
+                    steps++
+                    host.onStep(StepInfo(steps, decision.understanding, a.describe(), screen))
+                    val out = phone.execute(a, screen.state)
+                    log.step(steps, screen, decision, out)
+                    history += Prompts.HistoryItem(steps, decision.understanding, a.describe(), if (out.ok) "成功" else "失败：${out.message}")
+                    if (out.blocked) return fail(StopKind.BLOCKED, "这个操作被安全规则拦截了（${out.message}），我不会绕过它")
+                    if (out.ok) failures = 0 else {
+                        failures++
+                        if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "连续 $failures 次操作失败（${out.message}），我先停下了")
+                    }
+                    sigBeforeAction = sig
+                }
+            }
+        }
+    }
+
+    private fun signature(p: PerceptionResult) = StabilityWaiter.signatureOf(p.state.elements)
+}

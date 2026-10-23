@@ -11,7 +11,7 @@ sealed interface TaskState {
     data object Idle : TaskState
     data class Clarifying(val question: String, val options: List<String>) : TaskState
     data class Running(val step: Int, val maxSteps: Int, val log: List<StepRecord>) : TaskState
-    data class WaitingUser(val ask: Action.Ask) : TaskState
+    data class WaitingUser(val ask: Action.AskUser) : TaskState
     data class Conflict(val app: String, val interrupted: Boolean) : TaskState
     data class Done(val evidence: Evidence) : TaskState
     data class Failed(val reason: String, val leftovers: List<String>) : TaskState

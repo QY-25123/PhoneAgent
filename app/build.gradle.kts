@@ -49,6 +49,12 @@ android {
         aidl = true
         buildConfig = true
     }
+    packaging {
+        resources {
+            // anthropic-java 及其依赖（Jackson、OkHttp 等）里重复的元信息文件
+            excludes += setOf("META-INF/INDEX.LIST", "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/*.kotlin_module", "META-INF/versions/**", "META-INF/io.netty.versions.properties")
+        }
+    }
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
@@ -66,6 +72,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.anthropic.java)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
