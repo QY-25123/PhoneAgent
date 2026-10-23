@@ -5,7 +5,13 @@ import com.android.phoneagent.agent.AgentLoop
 import com.android.phoneagent.agent.CalendarTask
 import com.android.phoneagent.agent.ClarifyOutcome
 import com.android.phoneagent.agent.Clarifier
+import com.android.phoneagent.agent.ConfirmDecision
 import com.android.phoneagent.agent.DialogTurn
+import com.android.phoneagent.agent.EmailFlow
+import com.android.phoneagent.agent.EmailHost
+import com.android.phoneagent.agent.EmailResult
+import com.android.phoneagent.agent.EmailTask
+import com.android.phoneagent.perception.Draft
 import com.android.phoneagent.agent.LoopConfig
 import com.android.phoneagent.agent.LoopHost
 import com.android.phoneagent.agent.LoopResult
@@ -59,12 +65,16 @@ class TaskCoordinator(
     private val lock = Any()
     private var session: Job? = null
     private var pendingAnswer: CompletableDeferred<String>? = null
+    private var pendingConfirm: CompletableDeferred<ConfirmChoice>? = null
+    private var earlyInstruction: String? = null   // 确认卡片等待期间用户直接打字：当作修改要求
+    private val sendAttempted = HashSet<String>()   // 点过发送的邮件（收件人|主题）：重试前必须先查「已发送」
 
     override fun submit(text: String): Boolean {
         val t = text.trim()
         if (t.isEmpty()) return false
         synchronized(lock) {
             pendingAnswer?.let { it.complete(t); pendingAnswer = null; return false }
+            pendingConfirm?.let { earlyInstruction = t; it.complete(ConfirmChoice.MODIFY); pendingConfirm = null; return false }
             if (session?.isActive == true) {
                 emit(TaskEvent.AgentSaid("我还在处理上一件事，你可以先停止它。"))
                 return false
@@ -77,7 +87,7 @@ class TaskCoordinator(
 
     override fun stop() {
         val job: Job?
-        synchronized(lock) { job = session; pendingAnswer = null }
+        synchronized(lock) { job = session; pendingAnswer = null; pendingConfirm = null }
         if (job?.isActive != true) return
         job.cancel()
         scope.launch {
@@ -88,6 +98,10 @@ class TaskCoordinator(
         }
     }
 
+    override fun confirm(choice: ConfirmChoice) {
+        synchronized(lock) { pendingConfirm?.complete(choice); pendingConfirm = null }
+    }
+
     private fun emit(e: TaskEvent) {
         // 事件摘要写到 logcat（tag PA），自动化测试脚本靠它判断进度
         android.util.Log.i("PA", "TASK " + when (e) {
@@ -95,6 +109,7 @@ class TaskCoordinator(
             is TaskEvent.Ask -> "问：${e.text} 选项=${e.options}"
             is TaskEvent.Started -> "开始：${e.title}"
             is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
+            is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject}"
             is TaskEvent.Succeeded -> "成功：${e.title} ${e.detail}"
             is TaskEvent.Failed -> "失败：${e.reason}"
             is TaskEvent.Stopped -> "停止：${e.reason}"
@@ -127,6 +142,12 @@ class TaskCoordinator(
                         dialog += DialogTurn(false, o.question)
                         emit(TaskEvent.Ask(o.question, o.options))
                         dialog += DialogTurn(true, awaitUser())
+                    }
+                    is ClarifyOutcome.ReadyEmail -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        executeEmail(o.task, log, p)
+                        return
                     }
                     is ClarifyOutcome.Ready -> {
                         emit(TaskEvent.AgentSaid(o.restatement))
@@ -178,9 +199,60 @@ class TaskCoordinator(
         }
     }
 
+    private suspend fun executeEmail(task: EmailTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
+        emit(TaskEvent.Started("邮件 · ${task.recipient}", cfg.maxSteps))
+        val key = task.recipient.lowercase() + "|" + task.subject
+        try {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+            }
+            val host = object : EmailHost {
+                override fun onStep(info: StepInfo) {
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+                override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
+                override suspend fun confirm(draft: Draft): ConfirmDecision {
+                    emit(TaskEvent.Confirm(draft.to.joinToString(", "), draft.subject, draft.body))
+                    val d = CompletableDeferred<ConfirmChoice>()
+                    synchronized(lock) { earlyInstruction = null; pendingConfirm = d }
+                    return when (d.await()) {
+                        ConfirmChoice.SEND -> ConfirmDecision.Send
+                        ConfirmChoice.CANCEL -> ConfirmDecision.Cancel
+                        ConfirmChoice.MODIFY -> {
+                            val early = synchronized(lock) { earlyInstruction.also { earlyInstruction = null } }
+                            if (early != null) ConfirmDecision.Modify(early) else {
+                                emit(TaskEvent.Ask("想怎么改？直接告诉我就行。", emptyList()))
+                                ConfirmDecision.Modify(awaitUser())
+                            }
+                        }
+                    }
+                }
+            }
+            val result = EmailFlow(model, phone, host, cfg, clock, log).run(task, checkSentFirst = key in sendAttempted)
+            val image = env.thumbnail(EVIDENCE_W)
+            when (result) {
+                is EmailResult.Sent -> {
+                    sendAttempted += key
+                    emit(TaskEvent.Succeeded("邮件已发送给 ${result.draft.to.joinToString(", ")}", "主题：${result.draft.subject}",
+                        listOf(result.evidence.ifBlank { "在「已发送」里找到了这封邮件" }, "收件人和主题与你确认的一致"), image))
+                }
+                is EmailResult.AlreadySent -> emit(TaskEvent.Succeeded("这封邮件之前已经发出，没有重复发送", "收件人：${task.recipient}　主题：${task.subject}",
+                    listOf(result.evidence.ifBlank { "在「已发送」里找到了这封邮件" }), image))
+                is EmailResult.Cancelled -> emit(TaskEvent.Stopped("已取消。" + result.note))
+                is EmailResult.Failed -> { if (result.sendAttempted) sendAttempted += key; emit(TaskEvent.Failed(result.reason, result.leftovers)) }
+            }
+        } finally {
+            withContext(NonCancellable) { env.release() }
+        }
+    }
+
     companion object {
         const val MAX_CLARIFY_ROUNDS = 6
-        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
+        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|发给|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
         private const val EVIDENCE_W = 540
     }

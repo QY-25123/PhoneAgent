@@ -27,11 +27,14 @@ class FakeModel(private val replies: List<Any>) : ModelClient {
 
 fun clarifyJson(
     type: String = "calendar", title: String? = null, date: String? = null, start: String? = null, duration: Int? = null,
+    recipient: String? = null, content: String? = null, subject: String? = null, body: String? = null,
     missing: List<String> = emptyList(), question: String? = null, options: List<String> = emptyList(),
     mappedFrom: String? = null, reply: String? = null,
 ): String = JSONObject().apply {
     put("task_type", type); put("title", title ?: JSONObject.NULL); put("date", date ?: JSONObject.NULL)
     put("start_time", start ?: JSONObject.NULL); put("duration_minutes", duration ?: JSONObject.NULL)
+    put("recipient", recipient ?: JSONObject.NULL); put("email_content", content ?: JSONObject.NULL)
+    put("email_subject", subject ?: JSONObject.NULL); put("email_body", body ?: JSONObject.NULL)
     put("missing", JSONArray(missing)); put("assumed", JSONArray()); put("question", question ?: JSONObject.NULL)
     put("options", JSONArray(options)); put("mapped_from", mappedFrom ?: JSONObject.NULL); put("reply", reply ?: JSONObject.NULL)
 }.toString()
@@ -71,6 +74,16 @@ class FakePhone(
     var perceives = 0
     var insertedTask: CalendarTask? = null
     override suspend fun launchCalendarInsert(task: CalendarTask): ActionOutcome { insertedTask = task; return insert }
+    var emailTask: EmailTask? = null
+    var emailLaunch: ActionOutcome = ActionOutcome(true, "ok")
+    override suspend fun launchEmailCompose(task: EmailTask): ActionOutcome { emailTask = task; return emailLaunch }
+    val opened = ArrayList<String>()
+    override suspend fun openApp(app: String): ActionOutcome { opened += app; return ActionOutcome(true, "ok") }
+    var armResult: (String) -> Boolean = { true }
+    val armed = ArrayList<String>()
+    var disarms = 0
+    override suspend fun armGmailSend(hash: String): Boolean { armed += hash; return armResult(hash) }
+    override suspend fun disarmGmailSend() { disarms++ }
     override suspend fun perceive(): PerceptionResult = screens(perceives++)
     override suspend fun execute(action: Action, screen: ScreenState): ActionOutcome {
         executed += action
@@ -105,3 +118,26 @@ fun editorScreen(title: String = TASK.title, start: String = "3:00 PM", end: Str
     val st = ScreenState(2, "com.google.android.calendar", "Calendar", 1080, 2400, 0, els, screenshotJpeg = byteArrayOf(1))
     return PerceptionResult(st, "App: calendar 新建页", PerceptionTimings(0, 1, 1, 1, 1, 1))
 }
+
+private fun ui(i: Int, type: String, top: Int, text: String? = null, desc: String? = null, hint: String? = null, actions: Set<ElementAction> = emptySet(), res: String? = null) =
+    UiElement(i, "g$i".padEnd(4, 'x'), type, text, desc, hint, null, res, "android.widget.Button", Bounds(0, top, 1000, top + 100), actions, false, null, true)
+
+/** 合成 Gmail 写邮件页（结构取自真机录制：From 行有发件账号，To 行有收件人芯片，主题/正文是输入框）。 */
+fun gmailScreen(to: String = "qijie_jerry@163.com", subject: String = "[PA测试] 周五评审", body: String = "你好，周五评审改到下午3点。谢谢", pkg: String = "com.google.android.gm"): PerceptionResult {
+    val click = setOf(ElementAction.CLICK)
+    val edit = setOf(ElementAction.EDIT)
+    val els = listOf(
+        ui(1, "ImageButton", 0, desc = "Navigate up", actions = click),
+        ui(2, "Button", 0, desc = "Send", actions = click, res = "com.google.android.gm:id/send"),
+        ui(3, "Button", 300, text = "From", actions = click),
+        ui(4, "Text", 300, text = "test.user@example.com"),
+        ui(5, "Button", 400, text = "To", actions = click),
+        ui(6, "Button", 400, text = to, desc = "$to, $to", actions = click),
+        ui(7, "EditText", 465, text = subject.ifEmpty { null }, hint = "Subject", actions = edit),
+        ui(8, "EditText", 618, text = body.ifEmpty { "Compose email" }, actions = edit),
+    )
+    val st = ScreenState(2, pkg, "Gmail", 1080, 2400, 0, els, screenshotJpeg = byteArrayOf(1))
+    return PerceptionResult(st, "App: gmail 写邮件页", PerceptionTimings(0, 1, 1, 1, 1, 1))
+}
+
+fun inboxScreen(vararg labels: String) = screenOf("收件箱", *labels)

@@ -18,10 +18,15 @@ sealed interface TaskEvent {
     /** 一步进展。[step] 只给计入步数的动作；[thumb] 是虚拟屏当前画面的小图 */
     data class Progress(val step: Int?, val maxSteps: Int, val saw: String, val did: String, val thumb: Bitmap?) : TaskEvent
 
+    /** 邮件确认卡片：收件人、主题、正文**都是从 Gmail 写邮件页实际读到的内容**，用户确认的就是将要发送的内容 */
+    data class Confirm(val to: String, val subject: String, val body: String) : TaskEvent
+
     data class Succeeded(val title: String, val detail: String, val evidence: List<String>, val image: Bitmap?) : TaskEvent
     data class Failed(val reason: String, val leftovers: List<String>) : TaskEvent
     data class Stopped(val reason: String) : TaskEvent
 }
+
+enum class ConfirmChoice { SEND, MODIFY, CANCEL }
 
 /** 界面接入真实流程的入口（M2：[TaskCoordinator] 实现）。 */
 interface TaskBackend {
@@ -32,6 +37,9 @@ interface TaskBackend {
 
     /** 用户发来一句话：可能是新任务，也可能是对追问的回答。返回 true 表示开始了一个新任务。 */
     fun submit(text: String): Boolean
+
+    /** 用户在确认卡片上的选择（发送 / 修改 / 取消）。 */
+    fun confirm(choice: ConfirmChoice)
 
     /** 停止当前任务并清理虚拟屏 */
     fun stop()

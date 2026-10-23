@@ -7,7 +7,8 @@ export LC_ALL=en_US.UTF-8
 cd "$(dirname "$0")/.." || exit 2
 source scripts/p0/lib.sh
 TEXT=$1; shift
-ANSWERS=("$@")
+ANSWERS=(); CONFIRMS=()
+for a in "$@"; do case "$a" in @*) CONFIRMS+=("${a#@}");; *) ANSWERS+=("$a");; esac; done   # "@SEND" "@MODIFY" "@CANCEL"：对确认卡片的选择；其余是对追问的回答
 TIMEOUT=${TASK_TIMEOUT:-420}
 say() { adb shell "am broadcast -a $PKG.CMD -n $PKG/.CmdReceiver --es cmd say --es text '$1'" >/dev/null; }
 adb shell svc power stayon true; adb shell input keyevent KEYCODE_WAKEUP
@@ -15,13 +16,17 @@ adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2     # 创建虚拟�
 adb logcat -c
 START=$(date +%s)
 say "$TEXT"
-n=0; seen=0; RESULT=
+n=0; c=0; seen=0; RESULT=
 while [ $(( $(date +%s) - START )) -lt $TIMEOUT ]; do
   sleep 2
   adb logcat -d -s PA | grep -E 'TASK |TASKRUN' | sed 's/.*PA *: //' > $OUT/m2_events.txt
   total=$(wc -l < $OUT/m2_events.txt)
   if [ "$total" -gt "$seen" ]; then
     tail -n +$((seen+1)) $OUT/m2_events.txt | while read -r l; do echo "  $l"; done
+    # 新出现的确认卡片：按顺序点给定的选择
+    if tail -n +$((seen+1)) $OUT/m2_events.txt | grep -q '^TASK 确认卡片'; then
+      if [ $c -lt ${#CONFIRMS[@]} ]; then sleep 1; echo "  >>> 点击：${CONFIRMS[$c]}"; adb shell "am broadcast -a $PKG.CMD -n $PKG/.CmdReceiver --es cmd confirm --es choice ${CONFIRMS[$c]}" >/dev/null; c=$((c+1)); fi
+    fi
     # 新出现的追问：发送下一个回答
     if tail -n +$((seen+1)) $OUT/m2_events.txt | grep -q '^TASK 问：'; then
       if [ $n -lt ${#ANSWERS[@]} ]; then sleep 1; echo "  >>> 回答：${ANSWERS[$n]}"; say "${ANSWERS[$n]}"; n=$((n+1)); fi

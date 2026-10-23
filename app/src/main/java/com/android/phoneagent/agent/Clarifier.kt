@@ -53,6 +53,9 @@ sealed interface ClarifyOutcome {
     /** 信息齐全：复述一句话，然后立即开始（不再二次确认）。 */
     data class Ready(val task: CalendarTask, val restatement: String) : ClarifyOutcome
 
+    /** 邮件任务信息齐全：复述一句话，然后开始写草稿（发送前一定会让用户确认）。 */
+    data class ReadyEmail(val task: EmailTask, val restatement: String) : ClarifyOutcome
+
     /** 不开始任务，只回复（不支持的任务、闲聊、还没做的功能）。 */
     data class Reply(val text: String) : ClarifyOutcome
 
@@ -68,7 +71,7 @@ class Clarifier(
     private val model: ModelClient,
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     /** 目前能执行的任务类型（M2：只有日历）。识别出来但不能执行的会说明还在开发中 */
-    private val enabledKinds: Set<String> = setOf("calendar"),
+    private val enabledKinds: Set<String> = setOf("calendar", "email"),
     private val log: RunLog = NoopRunLog,
 ) {
     suspend fun clarify(dialog: List<DialogTurn>): ClarifyOutcome {
@@ -82,16 +85,23 @@ class Clarifier(
             effort = "low",
             model = Models.clarify,
         )
-        val resp = try {
-            model.complete(req).also { log.modelCall(req, it, null) }
-        } catch (e: ModelException) {
-            log.modelCall(req, null, e.message)
-            return ClarifyOutcome.Failed(e.message ?: "调用模型失败")
+        // 模型输出不合法（不是 JSON、task_type 不认识）时自动重试一次
+        var lastFailure: ClarifyOutcome = ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
+        repeat(2) {
+            val resp = try {
+                model.complete(req).also { log.modelCall(req, it, null) }
+            } catch (e: ModelException) {
+                log.modelCall(req, null, e.message)
+                return ClarifyOutcome.Failed(e.message ?: "调用模型失败")
+            }
+            val o = try { JSONObject(resp.json) } catch (e: Exception) { null }
+            if (o != null) {
+                val out = decide(o, now)
+                if (!(out is ClarifyOutcome.Failed)) return out
+                lastFailure = out
+            }
         }
-        val o = try { JSONObject(resp.json) } catch (e: Exception) {
-            return ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
-        }
-        return decide(o, now)
+        return lastFailure
     }
 
     internal fun decide(o: JSONObject, now: ZonedDateTime): ClarifyOutcome {
@@ -102,7 +112,8 @@ class Clarifier(
         when (kind) {
             "unsupported" -> return ClarifyOutcome.Reply(str("reply") ?: Prompts.capabilityText(enabledKinds))
             "chitchat" -> return ClarifyOutcome.Reply(str("reply") ?: Prompts.capabilityText(enabledKinds))
-            "email", "shopping" ->
+            "email" -> if (kind in enabledKinds) return decideEmail(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
+            "shopping" ->
                 if (kind !in enabledKinds) return ClarifyOutcome.Reply(Prompts.notYetText(kind!!, enabledKinds))
             "calendar" -> Unit
             else -> return ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
@@ -129,6 +140,26 @@ class Clarifier(
         val assumed = if (dur == null) listOf("时长按 1 小时算") else emptyList()
         val task = CalendarTask(title!!, date!!, start!!, dur ?: DEFAULT_DURATION_MIN, assumed)
         return ClarifyOutcome.Ready(task, task.restatement(mappedFrom == "提醒"))
+    }
+
+    /** 邮件：收件人和「邮件要表达的内容」必填；主题和正文由模型写好（只用用户给的信息）。 */
+    private fun decideEmail(o: JSONObject, mappedFrom: String?, options: List<String>): ClarifyOutcome {
+        fun str(k: String) = if (o.isNull(k)) null else o.optString(k).trim().takeIf { it.isNotEmpty() }
+        val recipient = str("recipient")
+        val content = str("email_content")
+        val subject = str("email_subject")
+        val body = str("email_body")
+        val missing = ArrayList<String>()
+        if (recipient == null) missing += "收件人"
+        if (content == null && body == null) missing += "邮件内容"
+        if (missing.isNotEmpty()) {
+            val q = str("question") ?: ("还需要这几项信息：" + missing.joinToString("、") + "。")
+            return ClarifyOutcome.Ask(q, options, mappedFrom)
+        }
+        val finalBody = body ?: content!!
+        val finalSubject = subject ?: finalBody.lineSequence().first().take(30)
+        val task = EmailTask(recipient!!, finalSubject, finalBody)
+        return ClarifyOutcome.ReadyEmail(task, task.restatement())
     }
 
     private fun parseTime(s: String): LocalTime? = runCatching { LocalTime.parse(s.trim().let { if (Regex("\\d:\\d\\d").matches(it)) "0$it" else it }) }.getOrNull()

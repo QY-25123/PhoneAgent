@@ -21,6 +21,13 @@ object SafetyRules {
     )
     private val LOCK_ID = Regex("place-?(your-?)?order|submit-?order", RegexOption.IGNORE_CASE)
 
+    /** Gmail 写邮件页的「发送」按钮：包名是 Gmail，且 id 以 :id/send 结尾或文字/描述是 Send/发送（FR-SAFE-12）。 */
+    fun isGmailSend(pkg: String?, id: String?, label: String): Boolean {
+        if (pkg != "com.google.android.gm") return false
+        val l = label.trim()
+        return id?.endsWith(":id/send") == true || l.equals("send", ignoreCase = true) || l == "发送"
+    }
+
     fun isHardLabel(label: String) = HARD_LABEL.containsMatchIn(label)
     fun isHardId(id: String?) = id != null && HARD_ID.containsMatchIn(id)
     fun isLockLabel(label: String) = LOCK_LABEL.containsMatchIn(label)

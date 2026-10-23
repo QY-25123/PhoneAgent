@@ -57,10 +57,12 @@ class AgentLoop(
     private val log: RunLog = NoopRunLog,
     private val sleep: suspend (Long) -> Unit = { delay(it) },
 ) {
-    suspend fun run(task: CalendarTask): LoopResult {
-        val taskText = "在 Google 日历里创建事项「${task.title}」"
-        val confirmed = task.confirmedFields()
-        val leftovers = listOf("日历里可能留有标题为「${task.title}」的事项或没保存的新建页，请检查")
+    suspend fun run(task: CalendarTask): LoopResult = run(CalendarLoopTask(task))
+
+    suspend fun run(task: LoopTask): LoopResult {
+        val taskText = task.taskText
+        val confirmed = task.confirmed
+        val leftovers = task.leftovers
         val history = ArrayList<Prompts.HistoryItem>()
         var steps = 0
         var calls = 0
@@ -76,17 +78,18 @@ class AgentLoop(
             return LoopResult.Failure(kind, reason, leftovers, steps, calls)
         }
 
-        val pre = phone.launchCalendarInsert(task)
-        history += if (pre.ok) Prompts.HistoryItem(null, "", "用「插入事项」意图在虚拟屏打开了日历新建页并预填标题和起止时间", "成功")
-        else Prompts.HistoryItem(null, "", "尝试用「插入事项」意图打开新建页", "失败（${pre.message}）：改用界面操作，从 open_app calendar 开始")
+        val pre = task.prelaunch(phone)
+        history += if (pre.ok) Prompts.HistoryItem(null, "", task.prelaunchOkNote, "成功")
+        else Prompts.HistoryItem(null, "", task.prelaunchFailNote, "失败（${pre.message}）：改用界面操作，从 open_app 开始")
 
         var pending: PerceptionResult? = null   // 已经感知过、下一轮直接用的界面
 
         // 自查：只看界面上实际看到的内容。返回 null 表示通过，否则是问题描述；模型失败抛出 [ModelException]
         suspend fun selfCheck(screen: PerceptionResult, claim: String): Pair<Boolean, String?> {
+            task.localVerify(screen.state)?.let { return it }   // 能本地核对的不调用模型
             calls++
             val vreq = ModelRequest(
-                "verify", Prompts.VERIFY_SYSTEM,
+                "verify", task.verifySystem,
                 listOf(ModelMessage("user", Prompts.verifyUser(taskText, confirmed, claim, screen.text), listOfNotNull(screen.state.screenshotJpeg))),
                 Schemas.VERIFY, 600, "low", Models.verify,
             )
@@ -98,29 +101,41 @@ class AgentLoop(
             return false to (v?.takeIf { !it.isNull("problem") }?.optString("problem") ?: "自查没有通过")
         }
 
-        // 快速通道：新建页已按要求预填好（本地核对一致）就直接点保存，再自查一次
+        // 快速通道：页面已经满足要求（本地核对一致）就直接完成/点按钮，省掉模型调用
         if (cfg.calendarFastPath && pre.ok) {
             val first = phone.perceive()
-            val idx = CalendarFastPath.saveIndex(task, first.state)
-            if (idx == null) {
+            val idx = task.fastTap(first.state)
+            if (task.alreadyDone(first.state)) {
+                val (ok, info) = try { selfCheck(first, task.fastClaim) } catch (e: ModelException) { return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败") }
+                if (ok) {
+                    log.step(steps, first, null, null, "快速通道：页面已满足要求，不需要操作")
+                    log.finish("成功：${task.fastClaim}", steps, calls, (System.nanoTime() - t0) / 1_000_000)
+                    return LoopResult.Success(task.fastClaim, info ?: "", steps, calls)
+                }
+                history += Prompts.HistoryItem(null, "", "本地核对页面", "没有通过：$info")
                 pending = first
-                history += Prompts.HistoryItem(null, "", "本地核对：新建页上的标题/日期/起止时间没有全部对上", "交给你检查和处理")
+            } else if (idx == null) {
+                pending = first
+                history += Prompts.HistoryItem(null, "", "本地核对：页面上的内容没有全部对上", "交给你检查和处理")
             } else {
                 steps++
                 val tapAction = Action.Tap(idx)
-                host.onStep(StepInfo(steps, "新建页已按要求预填好，标题、日期、起止时间都对得上", "点击「保存」", first))
+                host.onStep(StepInfo(steps, "页面已按要求预填好，各项都对得上（本地核对）", task.fastTapNote, first))
                 val out = phone.execute(tapAction, first.state)
-                log.step(steps, first, null, out, "快速通道：本地核对通过，直接保存")
-                history += Prompts.HistoryItem(steps, "新建页的标题、日期、起止时间与已确认信息一致（本地核对）", tapAction.describe(), if (out.ok) "成功" else "失败：${out.message}")
+                log.step(steps, first, null, out, "快速通道：本地核对通过，直接执行")
+                history += Prompts.HistoryItem(steps, "页面各项与已确认信息一致（本地核对）", tapAction.describe(), if (out.ok) "成功" else "失败：${out.message}")
                 if (out.blocked) return fail(StopKind.BLOCKED, "这个操作被安全规则拦截了（${out.message}），我不会绕过它")
                 if (out.ok) {
-                    val after = phone.perceive()
-                    val (ok, info) = try { selfCheck(after, "已点击保存") } catch (e: ModelException) { return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败") }
+                    // 等保存/转场结束（编辑页消失）再自查，最多等约 3 秒，避免看到还没关掉的编辑页
+                    var after = phone.perceive()
+                    var tries = 0
+                    while (task.stillEditing(after.state) && tries++ < 6) { sleep(500); after = phone.perceive() }
+                    val (ok, info) = try { selfCheck(after, task.fastClaim) } catch (e: ModelException) { return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败") }
                     if (ok) {
-                        log.finish("成功：已保存", steps, calls, (System.nanoTime() - t0) / 1_000_000)
-                        return LoopResult.Success("事项已保存", info ?: "", steps, calls)
+                        log.finish("成功：${task.fastClaim}", steps, calls, (System.nanoTime() - t0) / 1_000_000)
+                        return LoopResult.Success(task.fastClaim, info ?: "", steps, calls)
                     }
-                    history += Prompts.HistoryItem(null, "", "点击保存后自查", "自查未通过：$info")
+                    history += Prompts.HistoryItem(null, "", "快速操作后自查", "自查未通过：$info")
                     sigBeforeAction = StabilityWaiter.signatureOf(first.state.elements)
                     pending = after
                 } else {
@@ -148,7 +163,7 @@ class AgentLoop(
 
             val req = ModelRequest(
                 label = "step",
-                system = Prompts.STEP_SYSTEM,
+                system = task.stepSystem,
                 messages = listOf(ModelMessage("user",
                     Prompts.stepUser(taskText, confirmed, clock(), history.takeLast(cfg.historyWindow), screen.text, steps, cfg.maxSteps),
                     listOfNotNull(screen.state.screenshotJpeg))),
@@ -165,10 +180,20 @@ class AgentLoop(
                 log.step(steps, screen, null, null, "模型调用失败：${e.message}")
                 return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败")
             }
-            val decision = try { StepDecision.parse(resp.json) } catch (e: ModelException) {
+            var decision = try { StepDecision.parse(resp.json) } catch (e: ModelException) { null }
+            if (decision == null && calls < cfg.maxModelCalls) {
+                // 输出不合法：自动重试一次（同样的请求）
+                calls++
+                val retry = try { model.complete(req).also { log.modelCall(req, it, null) } } catch (e: ModelException) {
+                    log.modelCall(req, null, e.message)
+                    return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败")
+                }
+                decision = try { StepDecision.parse(retry.json) } catch (e: ModelException) { null }
+            }
+            if (decision == null) {
                 failures++
-                history += Prompts.HistoryItem(null, "", "（上一步输出格式不对：${e.message}）", "未执行")
-                log.step(steps, screen, null, null, "输出不合法：${e.message}")
+                history += Prompts.HistoryItem(null, "", "（上一步输出格式不对，重试一次仍不对）", "未执行")
+                log.step(steps, screen, null, null, "输出不合法（重试后仍不合法）")
                 if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "模型连续 $failures 次给出了无法执行的回复，我先停下了")
                 continue
             }

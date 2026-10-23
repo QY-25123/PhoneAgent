@@ -80,6 +80,11 @@ class CmdReceiver : BroadcastReceiver() {
                 intent.getStringExtra("verify")?.let { com.android.phoneagent.agent.Models.verify = it }
                 android.util.Log.i("PA", "MODELS clarify=${com.android.phoneagent.agent.Models.clarify} step=${com.android.phoneagent.agent.Models.step} verify=${com.android.phoneagent.agent.Models.verify}")
             }
+            "mailto" -> Agent.launchIntent(com.android.phoneagent.agent.MailIntent.args(
+                intent.getStringExtra("to") ?: "", intent.getStringExtra("subject") ?: "", intent.getStringExtra("body") ?: ""))
+            // 点确认卡片上的按钮：--es choice SEND|MODIFY|CANCEL
+            "confirm" -> com.android.phoneagent.task.TaskBackends.get(context).confirm(
+                com.android.phoneagent.task.ConfirmChoice.valueOf(intent.getStringExtra("choice") ?: "CANCEL"))
             "taskstop" -> com.android.phoneagent.task.TaskBackends.get(context).stop()
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())

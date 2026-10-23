@@ -142,4 +142,100 @@ class ClarifierTest {
         assertThat(t.endMillis(z) - t.beginMillis(z)).isEqualTo(3_600_000L)
         assertThat(t.beginMillis(z)).isEqualTo(java.time.ZonedDateTime.of(2026, 10, 28, 15, 0, 0, 0, z).toInstant().toEpochMilli())
     }
+
+    @Test fun invalidOutputIsRetriedOnceThenAccepted() = runTest {
+        val model = FakeModel(listOf("不是 json", clarifyJson(type = "weird"), clarifyJson(title = "a", date = "2026-10-28", start = "15:00")))
+        val c = Clarifier(model, clock = { NOW })
+        // 第一次不是 JSON → 重试一次，第二次 task_type 不认识 → 失败（只重试一次）
+        assertThat(c.clarify(user("x"))).isInstanceOf(ClarifyOutcome.Failed::class.java)
+        assertThat(model.requests).hasSize(2)
+        // 新的一轮：合法
+        assertThat(c.clarify(user("x"))).isInstanceOf(ClarifyOutcome.Ready::class.java)
+    }
+
+    @Test fun invalidThenValidSucceedsWithinOneClarify() = runTest {
+        val model = FakeModel(listOf("不是 json", clarifyJson(title = "a", date = "2026-10-28", start = "15:00")))
+        assertThat(Clarifier(model, clock = { NOW }).clarify(user("x"))).isInstanceOf(ClarifyOutcome.Ready::class.java)
+        assertThat(model.requests).hasSize(2)
+    }
+
+    @Test fun systemPromptHasDateTableAndExamples() = runTest {
+        val model = FakeModel(listOf(clarifyJson(title = "a", date = "2026-10-28", start = "15:00")))
+        Clarifier(model, clock = { NOW }).clarify(user("x"))
+        val sys = model.requests.single().system
+        assertThat(sys).contains("今天：2026-10-23 周五")
+        assertThat(sys).contains("明天：2026-10-24 周六")
+        assertThat(sys).contains("后天：2026-10-25 周日")
+        assertThat(sys).contains("下周（周一到周日）".replace("（周一到周日）", "")+"：周一 2026-10-26")
+        assertThat(sys).contains("本周（周一到周日）：周一 2026-10-19")
+        assertThat(sys).contains("周五 2026-10-30")          // 今天之后最近的周五
+        assertThat(sys).contains("不要追问用户是哪一天")
+        assertThat(Regex("^\\d\\. ", RegexOption.MULTILINE).findAll(sys.substringAfter("示例")).count()).isAtLeast(5)
+    }
+
+    @Test fun dateTableUsesMondayAsWeekStart() {
+        val t = Prompts.dateTable(NOW)
+        assertThat(t).contains("再下周：周一 2026-11-02")
+        assertThat(t).contains("周日 2026-10-25")   // 本周的周日在今天之后
+    }
+
+    // ---- 邮件（T2）----
+    private fun emailClarifier(vararg replies: Any) = Clarifier(FakeModel(replies.toList()), clock = { NOW })
+
+    @Test fun emailWithRecipientAndContentIsReady() = runTest {
+        val c = emailClarifier(clarifyJson(type = "email", recipient = "qijie_jerry@163.com", content = "周五评审改到下午3点", subject = "[PA测试] 周五评审改期", body = "你好，周五评审改到下午3点。谢谢"))
+        val r = c.clarify(user("给 qijie_jerry@163.com 发邮件")) as ClarifyOutcome.ReadyEmail
+        assertThat(r.task).isEqualTo(EmailTask("qijie_jerry@163.com", "[PA测试] 周五评审改期", "你好，周五评审改到下午3点。谢谢"))
+        assertThat(r.restatement).contains("先给你确认")
+    }
+
+    @Test fun emailMissingRecipientAndContentAsksOnceForBoth() = runTest {
+        val c = emailClarifier(clarifyJson(type = "email", missing = listOf("收件人", "邮件内容"), question = "发给谁？想说什么？"))
+        val r = c.clarify(user("帮我写封邮件")) as ClarifyOutcome.Ask
+        assertThat(r.question).isEqualTo("发给谁？想说什么？")
+    }
+
+    @Test fun emailMissingContentIsCaughtByCodeEvenIfModelForgot() = runTest {
+        val r = emailClarifier(clarifyJson(type = "email", recipient = "Alice", missing = emptyList())).clarify(user("给 Alice 写封邮件")) as ClarifyOutcome.Ask
+        assertThat(r.question).contains("邮件内容")
+    }
+
+    @Test fun emailMissingRecipientIsCaughtByCode() = runTest {
+        val r = emailClarifier(clarifyJson(type = "email", content = "明天开会", subject = "明天开会", body = "明天开会")).clarify(user("发邮件说明天开会")) as ClarifyOutcome.Ask
+        assertThat(r.question).contains("收件人")
+    }
+
+    @Test fun nameOnlyRecipientIsAcceptedForLookup() = runTest {
+        val r = emailClarifier(clarifyJson(type = "email", recipient = "Alice", content = "改期", subject = "改期", body = "改期了")).clarify(user("x")) as ClarifyOutcome.ReadyEmail
+        assertThat(r.task.recipient).isEqualTo("Alice")
+        assertThat(r.task.hasAddress).isFalse()
+    }
+
+    @Test fun emailSubjectFallsBackToFirstLineOfBody() = runTest {
+        val r = emailClarifier(clarifyJson(type = "email", recipient = "a@b.com", content = "x", body = "明天十点开会\n请准时")).clarify(user("x")) as ClarifyOutcome.ReadyEmail
+        assertThat(r.task.subject).isEqualTo("明天十点开会")
+    }
+
+    @Test fun emailKindIsRepliedAsInDevelopmentWhenNotEnabled() = runTest {
+        val r = clarifier(clarifyJson(type = "email")).clarify(user("发邮件")) as ClarifyOutcome.Reply
+        assertThat(r.text).contains("还在开发中")
+    }
+
+    @Test fun emailPromptIsInTheSystemPromptWithExamples() = runTest {
+        val model = FakeModel(listOf(clarifyJson(type = "email", recipient = "a@b.com", content = "x", subject = "s", body = "b")))
+        Clarifier(model, clock = { NOW }).clarify(user("x"))
+        val sys = model.requests.single().system
+        assertThat(sys).contains("email_subject")
+        assertThat(sys).contains("不编造")
+        assertThat(sys).contains("缺内容")
+    }
+
+    @Test fun emailTaskMatchesDraftIgnoringWhitespaceNoise() {
+        val t = EmailTask("Qijie_Jerry@163.com", "[PA测试] 周五评审", "你好，\n周五评审改到下午3点。")
+        assertThat(t.matches(com.android.phoneagent.perception.Draft(listOf("qijie_jerry@163.com"), "[PA测试]  周五评审", "你好，\n周五评审改到下午3点。\u00a0"))).isTrue()
+        assertThat(t.matches(com.android.phoneagent.perception.Draft(listOf("other@163.com"), t.subject, t.body))).isFalse()
+        assertThat(t.matches(com.android.phoneagent.perception.Draft(listOf("qijie_jerry@163.com"), t.subject, "别的正文"))).isFalse()
+        assertThat(t.matches(null)).isFalse()
+        assertThat(EmailTask("Alice", "s", "b").matches(com.android.phoneagent.perception.Draft(listOf("alice@x.com"), "s", "b"))).isFalse()   // 只有名字不做本地核对
+    }
 }

@@ -34,9 +34,11 @@ class PrivilegedService : IPrivileged.Stub() {
         if (out.contains("Error")) error(out.trim())
     }
 
-    /** 只放行日历「插入事项」意图：-a ...INSERT 且 -d content://com.android.calendar/...（其他意图一律拒绝）。 */
+    /** 只放行两种意图：日历「插入事项」（-a INSERT + content://com.android.calendar/...）和 Gmail 写邮件（-a SENDTO + mailto: + -p Gmail）；其他一律拒绝。 */
     override fun launchIntent(displayId: Int, amArgs: Array<String>) {
-        require(amArgs.contains("android.intent.action.INSERT") && amArgs.any { it.startsWith("content://com.android.calendar/") }) { "不允许的意图" }
+        val calendarInsert = amArgs.contains("android.intent.action.INSERT") && amArgs.any { it.startsWith("content://com.android.calendar/") }
+        val mailCompose = amArgs.contains("android.intent.action.SENDTO") && amArgs.any { it.startsWith("mailto:") } && amArgs.contains("com.google.android.gm")
+        require(calendarInsert || mailCompose) { "不允许的意图" }
         val cmd = listOf("am", "start", "--display", displayId.toString(), "--activity-clear-task") + amArgs
         val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()
@@ -115,6 +117,22 @@ class PrivilegedService : IPrivileged.Stub() {
         guardPoint(displayId, null, null)
         return ui.setTextNode(displayId, windowId, nodeIndex, left, top, right, bottom, text)
     }
+
+    /** 虚拟屏上 Gmail 草稿当前内容的哈希（在特权进程里自己读，不信任调用方）；不是写邮件页返回 null。 */
+    private fun currentDraftHash(displayId: Int): String? = runCatching {
+        val ext = com.android.phoneagent.perception.ElementExtractor.extract(com.android.phoneagent.perception.RawSnapshot.parse(ui.snapshot(displayId)))
+        val st = com.android.phoneagent.perception.ScreenState(displayId, ext.packageName, ext.pageTitle, 1080, 2400, 0, ext.elements)
+        com.android.phoneagent.perception.GmailDraft.read(st)?.let { com.android.phoneagent.safety.ConfirmToken.hash(it) }
+    }.getOrNull()
+
+    override fun armGmailSendHash(displayId: Int, hash: String): Boolean {
+        if (currentDraftHash(displayId) != hash) { com.android.phoneagent.safety.SafetyGuard.sendGate.disarm(); return false }
+        com.android.phoneagent.safety.SafetyGuard.draftHashProvider = { currentDraftHash(displayId) }
+        com.android.phoneagent.safety.SafetyGuard.sendGate.arm(hash)
+        return true
+    }
+
+    override fun disarmGmailSend() = com.android.phoneagent.safety.SafetyGuard.sendGate.disarm()
 
     override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
     override fun globalBack() = ui.globalBack()

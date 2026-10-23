@@ -14,6 +14,20 @@ interface PhoneController {
     /** 用日历「插入事项」意图在虚拟屏打开新建页并预填标题和起止时间；失败时循环会退回界面操作。 */
     suspend fun launchCalendarInsert(task: CalendarTask): ActionOutcome
 
+    /** 用 mailto 意图在虚拟屏打开 Gmail 写邮件页，预填收件人、主题、正文；失败时循环退回界面操作。 */
+    suspend fun launchEmailCompose(task: EmailTask): ActionOutcome
+
+    /** 打开允许的 App（日历 / Gmail / Amazon）。 */
+    suspend fun openApp(app: String): ActionOutcome
+
+    /**
+     * 内容绑定的发送放行：特权侧自己读草稿算哈希，与 [hash] 一致才布防（一次性），点击发送时还会再校验一次。
+     * 返回 false 表示此刻草稿内容与 [hash] 不一致（或读不到）。
+     */
+    suspend fun armGmailSend(hash: String): Boolean
+
+    suspend fun disarmGmailSend()
+
     suspend fun perceive(): PerceptionResult
 
     /** 执行一个动作（open_app / tap / type / scroll / back / press_enter）。元素编号以 [screen] 为准。 */

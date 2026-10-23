@@ -238,6 +238,9 @@ object Agent {
     /** 感知：取虚拟屏的原始快照（JSON）。返回 null 表示未连接。 */
     fun snapshot(display: Int = displayId): String? = priv?.snapshotTree(display)
 
+    /** debug：在虚拟屏上用 am start 启动一个意图（只放行日历插入/Gmail mailto）。 */
+    fun launchIntent(args: Array<String>) = call("启动意图", guarded = true) { it.launchIntent(displayId, args); report("已启动意图") }
+
     /** 感知：虚拟屏最新一帧的全分辨率位图（需要 [keepFull]）。 */
     fun latestFrame(): Bitmap? = lastFull
 

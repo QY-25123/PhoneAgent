@@ -37,4 +37,21 @@ class SafetyRulesTest {
         assertThat(SafetyRules.isLockLabel("Try Prime")).isFalse()
         assertThat(SafetyRules.isLockId("prime-signup-button")).isFalse()
     }
+
+    // ---- Gmail 发送按钮的硬拦截（FR-SAFE-12）：按资源 id、文字、描述任一匹配 ----
+    @Test fun gmailSendButtonIsRecognizedByIdLabelOrDescription() {
+        val gm = "com.google.android.gm"
+        assertThat(SafetyRules.isGmailSend(gm, "com.google.android.gm:id/send", "")).isTrue()
+        assertThat(SafetyRules.isGmailSend(gm, null, "Send")).isTrue()
+        assertThat(SafetyRules.isGmailSend(gm, null, " send ")).isTrue()
+        assertThat(SafetyRules.isGmailSend(gm, null, "发送")).isTrue()
+        assertThat(SafetyRules.isGmailSend(gm, "x:id/Send", "Anything")).isFalse()   // id 要精确以 :id/send 结尾（大小写敏感）
+    }
+
+    @Test fun sendButtonRuleIsLimitedToGmail() {
+        assertThat(SafetyRules.isGmailSend("com.google.android.calendar", null, "Send")).isFalse()
+        assertThat(SafetyRules.isGmailSend(null, "a:id/send", "Send")).isFalse()
+        assertThat(SafetyRules.isGmailSend("com.google.android.gm", null, "Send money")).isFalse()
+        assertThat(SafetyRules.isGmailSend("com.google.android.gm", null, "Attach file")).isFalse()
+    }
 }

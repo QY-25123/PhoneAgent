@@ -8,13 +8,17 @@ object Schemas {
     /** 任务澄清（PRD FR-CLR-1）。 */
     val CLARIFY = """
     {"type":"object","additionalProperties":false,
-     "required":["task_type","title","date","start_time","duration_minutes","missing","assumed","question","options","mapped_from","reply"],
+     "required":["task_type","title","date","start_time","duration_minutes","recipient","email_content","email_subject","email_body","missing","assumed","question","options","mapped_from","reply"],
      "properties":{
        "task_type":{"type":"string","enum":["calendar","email","shopping","unsupported","chitchat"]},
        "title":${nullable("string")},
        "date":${nullable("string")},
        "start_time":${nullable("string")},
        "duration_minutes":${nullable("integer")},
+       "recipient":${nullable("string")},
+       "email_content":${nullable("string")},
+       "email_subject":${nullable("string")},
+       "email_body":${nullable("string")},
        "missing":$STRINGS,
        "assumed":$STRINGS,
        "question":${nullable("string")},

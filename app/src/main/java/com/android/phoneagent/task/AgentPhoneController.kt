@@ -4,6 +4,8 @@ import com.android.phoneagent.agent.Action
 import com.android.phoneagent.agent.ActionOutcome
 import com.android.phoneagent.agent.AppCatalog
 import com.android.phoneagent.agent.CalendarTask
+import com.android.phoneagent.agent.EmailTask
+import com.android.phoneagent.agent.MailIntent
 import com.android.phoneagent.agent.Direction
 import com.android.phoneagent.agent.PhoneController
 import com.android.phoneagent.perception.ElementAction
@@ -38,6 +40,24 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
         }
         ActionOutcome(true, "ok")
     }
+
+    override suspend fun launchEmailCompose(task: EmailTask): ActionOutcome = run("Gmail 写邮件") {
+        // 只有给了邮箱地址才预填收件人；只有名字时留空，由模型在界面上从联系人建议里选
+        val to = if (task.hasAddress) task.recipient else ""
+        Agent.withPriv("Gmail 写邮件", guarded = true) { it.launchIntent(displayId, MailIntent.args(to, task.subject, task.body)) }
+        ActionOutcome(true, "ok")
+    }
+
+    override suspend fun openApp(app: String): ActionOutcome {
+        val pkg = AppCatalog.resolve(app) ?: return ActionOutcome(false, "不允许打开「$app」：只能打开日历、Gmail、Amazon")
+        return run("打开 $pkg") { Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }; ActionOutcome(true, "ok") }
+    }
+
+    override suspend fun armGmailSend(hash: String): Boolean = try {
+        Agent.withPriv("布防发送") { it.armGmailSendHash(displayId, hash) }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) { false }
+
+    override suspend fun disarmGmailSend() { Agent.withPriv("撤销布防") { it.disarmGmailSend() } }
 
     override suspend fun execute(action: Action, screen: ScreenState): ActionOutcome {
         val out = when (action) {

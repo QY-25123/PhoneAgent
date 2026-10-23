@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
+import com.android.phoneagent.task.ConfirmChoice
 import com.android.phoneagent.task.TaskBackend
 import com.android.phoneagent.task.TaskEvent
 import kotlinx.coroutines.CompletableDeferred
@@ -79,7 +80,13 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
                     )
                 }
             }
+            is TaskEvent.Confirm -> {
+                items.filter { it is ChatItem.Confirm && it.state == ConfirmState.PENDING }.forEach { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SUPERSEDED) } }
+                add(ChatItem.Confirm(id(), e.to, e.subject, e.body, ConfirmState.PENDING))
+                liveStatus(LiveStatus.WAITING, "等你确认后发送")
+            }
             is TaskEvent.Succeeded -> {
+                items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }
                 liveStatus(LiveStatus.DONE, e.title)
                 add(ChatItem.Success(id(), e.title, e.detail, e.evidence, null, e.image?.asImageBitmap()))
             }
@@ -139,7 +146,22 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
         }
     }
 
-    fun onConfirm(a: ConfirmAction) { confirmWaiter?.complete(a); confirmWaiter = null }
+    fun onConfirm(a: ConfirmAction) {
+        if (backend != null) {
+            val pending = items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.PENDING } ?: return
+            replace(pending.id) {
+                (it as ChatItem.Confirm).copy(state = when (a) {
+                    ConfirmAction.SEND -> ConfirmState.SENDING
+                    ConfirmAction.MODIFY -> ConfirmState.SUPERSEDED
+                    ConfirmAction.CANCEL -> ConfirmState.CANCELLED
+                })
+            }
+            if (a == ConfirmAction.SEND) liveStatus(LiveStatus.RUNNING, "正在发送")
+            backend.confirm(when (a) { ConfirmAction.SEND -> ConfirmChoice.SEND; ConfirmAction.MODIFY -> ConfirmChoice.MODIFY; ConfirmAction.CANCEL -> ConfirmChoice.CANCEL })
+            return
+        }
+        confirmWaiter?.complete(a); confirmWaiter = null
+    }
     fun onOption(questionId: Long, index: Int) {
         replace(questionId) { (it as ChatItem.Question).copy(chosen = index) }
         val q = items.firstOrNull { it.id == questionId } as? ChatItem.Question

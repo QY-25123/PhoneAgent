@@ -16,6 +16,11 @@ object CalendarFastPath {
     private val H24 = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
     private val MON = DateTimeFormatter.ofPattern("MMM d", Locale.US)
 
+    /** 还停在日历新建/编辑页（有「Save」按钮和输入框）。 */
+    fun isEditor(s: ScreenState): Boolean =
+        s.packageName == AppCatalog.CALENDAR && s.elements.any { ElementAction.EDIT in it.actions } &&
+            s.elements.any { ElementAction.CLICK in it.actions && (it.text ?: it.desc ?: it.mergedText)?.trim()?.let { t -> t == "Save" || t == "保存" } == true }
+
     /** 「保存」按钮的元素编号；不满足条件返回 null。 */
     fun saveIndex(task: CalendarTask, s: ScreenState): Int? {
         val els = s.elements

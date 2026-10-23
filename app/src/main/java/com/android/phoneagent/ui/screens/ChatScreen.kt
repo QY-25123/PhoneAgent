@@ -90,7 +90,7 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(AppTheme.space.s3),
         ) {
             if (items.isEmpty()) {
-                item("intro") { EmptyIntro(onExample = { controller.submit(it) }) }
+                item("intro") { EmptyIntro(onExample = { input = it }) }   // 点示例只把文字填进输入框，不发送
             }
             items(items.size, key = { items[it].id }) { i ->
                 val item = items[i]
@@ -137,13 +137,12 @@ fun TopArea(onMenu: () -> Unit, workPulse: Int, working: Boolean, modifier: Modi
 
 @Composable
 private fun EmptyIntro(onExample: (String) -> Unit) {
-    val name = AgentProfile.name.ifBlank { "我" }
     Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s3)) {
-        AgentBubble("我是$name。你说一件事，我在后台的虚拟屏上替你办，你照常用手机。我不会付款，发邮件前一定先让你确认。")
+        AgentBubble("想让我帮你做什么？")
         Text("试试这些", style = AppTheme.type.label, color = AppTheme.colors.textTertiary, modifier = Modifier.padding(start = AppTheme.space.s2))
-        ExampleRow(AppIcons.calendar, "周五下午帮我在日历加个和 Alice 的评审会议", onExample)
-        ExampleRow(AppIcons.mail, "给 Alice 发邮件，说明周五评审改到下午 3 点", onExample)
-        ExampleRow(AppIcons.cart, "把 Amazon 购物车带到下单页，我自己付款", onExample)
+        ExampleRow(AppIcons.calendar, "帮我加个日历事项", onExample)
+        ExampleRow(AppIcons.mail, "帮我写封邮件", onExample)
+        ExampleRow(AppIcons.cart, "帮我把购物车带到结算页", onExample)
     }
 }
 

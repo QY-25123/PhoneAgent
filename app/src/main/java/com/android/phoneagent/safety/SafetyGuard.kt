@@ -19,13 +19,16 @@ object SafetyGuard {
     @Volatile private var armedRecipient: String? = null
     @Volatile private var armedUntil = 0L
 
+    /** 内容绑定的一次性放行（用户在确认卡片上确认的那一版草稿）。见 [SendGate]。 */
+    val sendGate = SendGate()
+
+    /** 读取虚拟屏上 Gmail 草稿当前内容的哈希；由特权服务设置（读不到返回 null → 拦截）。 */
+    @Volatile var draftHashProvider: (() -> String?)? = null
+
     data class Hard(val rect: Rect, val label: String, val gmailSend: Boolean)
 
     private fun isGmailSend(n: AccessibilityNodeInfo): Boolean {
-        if (n.packageName?.toString() != GMAIL) return false
-        val id = n.viewIdResourceName ?: ""
-        val l = (n.contentDescription ?: n.text ?: "").toString().trim()
-        return id.endsWith(":id/send") || l.equals("send", true) || l == "发送"
+        return SafetyRules.isGmailSend(n.packageName?.toString(), n.viewIdResourceName, (n.contentDescription ?: n.text ?: "").toString())
     }
 
     /** Gmail 撰写界面里出现的邮箱地址（收件人芯片、建议等）。 */
@@ -79,6 +82,12 @@ object SafetyGuard {
         for (h in hardControls(roots)) {
             if (!Rect(h.rect).apply { inset(-MARGIN, -MARGIN) }.contains(x, y)) continue
             if (h.gmailSend) {
+                if (sendGate.isArmed()) {
+                    // 内容绑定的放行：此刻页面上的草稿哈希必须和确认时一致
+                    val allowed = sendGate.check(runCatching { draftHashProvider?.invoke() }.getOrNull(), consume)
+                    if (allowed) continue
+                    return "Gmail 发送被拦截：草稿内容与你确认的不一致（令牌已作废，需要重新确认）"
+                }
                 val ok = armedRecipient != null && System.currentTimeMillis() < armedUntil && armedRecipient in composeRecipients(roots)
                 if (ok) { if (consume) { armedRecipient = null; armedUntil = 0 }; continue }
                 return "命中 Gmail 发送按钮「${h.label}」：未经确认不允许发送"

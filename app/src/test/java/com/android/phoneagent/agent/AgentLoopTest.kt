@@ -123,6 +123,15 @@ class AgentLoopTest {
         assertThat(r.kind).isEqualTo(StopKind.REPEATED_FAILURE)
         assertThat(phone.executed).isEmpty()
         assertThat(r.steps).isEqualTo(0)
+        assertThat(r.modelCalls).isEqualTo(6)   // 每次都先自动重试一次
+    }
+
+    @Test fun invalidOutputIsRetriedOnceAutomatically() = runTest {
+        val model = FakeModel(listOf("不是 json", tap, done, verifyJson(true)))
+        val phone = FakePhone(changing)
+        val r = loop(model, phone, cfg = LoopConfig(calendarFastPath = false)).run(TASK) as LoopResult.Success
+        assertThat(phone.executed).containsExactly(Action.Tap(2))   // 重试拿到了合法回复，照常执行
+        assertThat(r.modelCalls).isEqualTo(4)
     }
 
     @Test fun modelErrorStopsAndSaysWhy() = runTest {
@@ -193,7 +202,7 @@ class AgentLoopTest {
         loop(model, FakePhone(changing, insert = ActionOutcome(false, "没有应用能处理"))).run(TASK)
         val t = model.requests[0].messages.single().text
         assertThat(t).contains("失败（没有应用能处理）")
-        assertThat(t).contains("open_app calendar")
+        assertThat(t).contains("open_app")
     }
 
     // ---- 日历快速通道 ----

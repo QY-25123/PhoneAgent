@@ -56,6 +56,10 @@ interface IPrivileged {
     boolean clickNode(int displayId, int windowId, int nodeIndex, int left, int top, int right, int bottom) = 24;
     boolean setTextNode(int displayId, int windowId, int nodeIndex, int left, int top, int right, int bottom, String text) = 25;
 
+    // Gmail 发送的内容绑定放行：特权侧自己读草稿当前内容算哈希，与 hash 一致才布防（一次性、120 秒），点击发送的那一刻再校验一次
+    boolean armGmailSendHash(int displayId, String hash) = 26;
+    void disarmGmailSend() = 27;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }
