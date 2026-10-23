@@ -19,6 +19,7 @@ orgJson = "20240303"
 [libraries]
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 json = { group = "org.json", name = "json", version.ref = "orgJson" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

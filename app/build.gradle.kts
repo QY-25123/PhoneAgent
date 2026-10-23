@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
