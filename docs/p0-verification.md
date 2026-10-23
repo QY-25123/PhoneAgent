@@ -5,10 +5,10 @@
 
 | 项 | 能力 | 结论 | 状态 |
 |---|---|---|---|
-| P0-1 UV-5 | 三个目标 App 在虚拟屏运行 | Google 日历通过；Telegram、Amazon 未完成（见下） | 进行中 |
+| P0-1 UV-5 | 三个目标 App（日历、Gmail、Amazon）在虚拟屏运行 | Google 日历通过；Gmail、Amazon 未完成（T2 已从 Telegram 改为 Gmail） | 进行中 |
 | P0-2 UV-6 | Amazon 结算页：安全窗口与界面树 | 未开始（Amazon 未安装） | 阻塞 |
 | P0-3 UV-3 | 同一 App 冲突检测 | **通过**（吸收场景为启发式） | 完成 |
-| P0-4 UV-2 | 任务移到主屏（交接） | 设置、日历通过；Amazon、Telegram 待补测 | 部分完成 |
+| P0-4 UV-2 | 任务移到主屏（交接） | 设置、日历通过；Gmail、Amazon 待补测 | 部分完成 |
 | P0-5 UV-4 | 悬浮窗 | **通过**，但有一条重要限制（某些 App 会让所有悬浮窗消失） | 完成 |
 | P0-6 UV-1 | 全屏观看帧率 | **通过**（10 fps 目标和 5 fps 底线在模拟器上都达到；CPU 路径有成本） | 完成 |
 
@@ -37,13 +37,13 @@
 - 一个实现细节：任务被抢走后，应立即停止对虚拟屏的操作，否则 agent 的触摸会落在已经不属于它的 display 上。
 
 ### 注意
-- `Settings` 是 singleTask 风格的应用，启动器启动时的行为（新建任务）对别的 App 可能不同，在 Telegram、Google 日历上需要再确认（UV-5 完成后补测）。
+- `Settings` 是 singleTask 风格的应用，启动器启动时的行为（新建任务）对别的 App 可能不同，在 Gmail、Google 日历上需要再确认（补测见下）。
 
 ---
 
 ## P0-4 UV-2 任务从虚拟屏移到主屏（交接）：设置、日历通过
 
-脚本：`scripts/p0/uv2_handoff.sh`（全部断言通过）。Amazon、Telegram 的补测见 UV-5/UV-6 完成之后。
+脚本：`scripts/p0/uv2_handoff.sh`（全部断言通过）。Gmail、Amazon 的补测见 UV-5/UV-6 完成之后。
 
 ### 方法
 `IActivityTaskManager.moveRootTaskToDisplay(taskId, 0)`（经 AIDL `moveTaskToDisplay`，任务 id 来自 `listTasks`）。PRD 8.6 里提到的 `moveRootTaskToDisplay` 只验证过「同一 display 会报错」，这里验证了从虚拟屏移到主屏。
@@ -62,7 +62,7 @@
 - **通过标准达成**：移动后页面状态与移动前一致，Activity 不重建、不崩溃，不需要降级。
 - FR-HO-4/5（交接）**可实现**。移动是即时的（约 1 秒内完成）。
 - 实现细节：移动后任务位于主屏最上面，屏幕由用户接管；agent 必须在移动前停止对该 App 的所有操作（FR-HO-3）。
-- 未覆盖：Telegram 和 Amazon 上的状态保持（Amazon 的购物流程含 WebView），UV-5/UV-6 完成后补测，结果回写本表。
+- 未覆盖：Gmail 和 Amazon 上的状态保持（Amazon 的购物流程含 WebView），UV-5/UV-6 完成后补测，结果回写本表。
 
 ---
 
@@ -85,7 +85,7 @@
 
 ### 重要限制：目标 App 可以让所有悬浮窗消失
 验证中发现：当「设置」在虚拟屏上运行时，悬浮窗被系统**隐藏**（`dumpsys window` 里 `mForceHideNonSystemOverlayWindow=true`，`isReadyForDisplay()=false`）。这是因为设置会对敏感页面设置「隐藏非系统悬浮窗」标志，而这个标志**对整个系统生效，不区分屏幕**：即使该 App 只在虚拟屏上，用户主屏上的悬浮窗也会消失。
-- Google 日历、Telegram 在虚拟屏上运行时，悬浮窗**正常显示**（实测）。
+- Google 日历在虚拟屏上运行时，悬浮窗**正常显示**（实测）；Gmail 待实测。
 - **Amazon 需要在结算相关页面实测**（UV-6 的一部分）：付款类页面常设置该标志。
 - 这意味着小窗**不能作为唯一的状态通道**。PRD 里的系统通知（FR-NOTIF-2）要从「补充」升级为**必需的兜底**：状态变化（尤其是需要交接、需要回答、失败）必须发通知；并且 agent 要能检测到小窗被隐藏（`isReadyForDisplay`）。
 
