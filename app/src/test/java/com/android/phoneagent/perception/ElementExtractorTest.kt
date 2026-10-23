@@ -223,4 +223,108 @@ class ElementExtractorTest {
         )))
         assertThat(r.elements.first { it.type == "EditText" }.hint).isEqualTo("To")
     }
+
+    // ---- 通用文字的按钮（M1 修复：Amazon 的 Prime 订阅按钮文字只是 Submit）----
+    @Test
+    fun genericButtonTakesTextFromItsChildren() {
+        val r = extract(window(listOf(
+            node(0, "android.widget.Button", listOf(0, 1000, 1000, 1100), text = "Submit", clk = true),
+            node(1, b = listOf(100, 1020, 900, 1080), text = "Try Prime for Young Adults"),
+        )))
+        val e = r.elements.single()
+        assertThat(e.text).isEqualTo("Submit")
+        assertThat(e.mergedText).isEqualTo("Try Prime for Young Adults")
+        assertThat(e.mergedFromOverlap).isFalse()
+    }
+
+    @Test
+    fun genericButtonTakesOverlappingTextNodeAndMarksIt() {
+        val r = extract(window(listOf(
+            node(0, "android.widget.Button", listOf(0, 1000, 1000, 1100), text = "Submit", clk = true),
+            node(0, b = listOf(100, 1020, 900, 1080), text = "Continue with Prime"),
+        )))
+        val e = r.elements.first { it.type == "Button" }
+        assertThat(e.mergedText).isEqualTo("Continue with Prime")
+        assertThat(e.mergedFromOverlap).isTrue()
+    }
+
+    @Test
+    fun overlappingNumbersAreNotUsedAsLabels() {
+        val r = extract(window(listOf(
+            node(0, "android.widget.Button", listOf(0, 1000, 1000, 1100), text = "Submit", clk = true),
+            node(0, b = listOf(100, 1020, 900, 1080), text = "1"),
+        )))
+        assertThat(r.elements.first { it.type == "Button" }.mergedText).isNull()
+    }
+
+    @Test
+    fun genericButtonWithNothingElseKeepsAncestorResourceId() {
+        val r = extract(window(listOf(
+            node(0, "android.view.View", listOf(0, 900, 1080, 1200), res = "updp-mobile-stickyFooterWrapper"),
+            node(1, "android.view.View", listOf(40, 1000, 1040, 1100), res = "prime-signup-button"),
+            node(2, "android.widget.Button", listOf(42, 1002, 1036, 1098), text = "Submit", clk = true),
+        )))
+        val e = r.elements.single()
+        assertThat(e.idHint).isEqualTo("prime-signup-button")
+        assertThat(ScreenSerializer.line(e)).contains("\"Submit\"")
+        assertThat(ScreenSerializer.line(e)).contains("#prime-signup-button")
+    }
+
+    // ---- 同一窗口内的遮挡 ----
+    private fun sheetOverToolbar(toolbarOrder: Int, sheetOrder: Int): Extraction {
+        val rows = (0 until 8).map { i ->
+            node(2, "android.widget.Button", listOf(0, 300 + i * 126, 1080, 300 + (i + 1) * 126), text = "行 $i", clk = true)
+        }
+        return extract(window(listOf(
+            node(0, "android.widget.FrameLayout", FULL),
+            node(1, "android.view.ViewGroup", listOf(0, 0, 1080, 168), order = toolbarOrder),          // 工具栏
+            node(2, "android.widget.Button", listOf(100, 20, 300, 150), desc = "Search", clk = true),
+            node(1, "android.view.ViewGroup", listOf(0, 0, 1080, 1400), order = sheetOrder),           // 底部面板，盖住工具栏
+            node(2, "android.widget.Button", listOf(11, 21, 158, 168), desc = "Cancel", clk = true),
+        ) + rows))
+    }
+
+    @Test
+    fun denseLaterPaintedSheetOccludesToolbarBeneathIt() {
+        val r = sheetOverToolbar(toolbarOrder = 1, sheetOrder = 2)
+        assertThat(r.elements.map { it.desc }).doesNotContain("Search")
+        assertThat(r.elements.map { it.desc }).contains("Cancel")
+    }
+
+    @Test
+    fun sameTreeButToolbarPaintedOnTopIsKept() {
+        // 无障碍树里的顺序不是绘制顺序：这里工具栏的 drawingOrder 更大，画在面板上面
+        val r = sheetOverToolbar(toolbarOrder = 2, sheetOrder = 1)
+        assertThat(r.elements.map { it.desc }).contains("Search")
+    }
+
+    @Test
+    fun sparseTransparentWrapperDoesNotOccludeTheListBeneathIt() {
+        val r = extract(window(listOf(
+            node(0, "android.widget.FrameLayout", FULL),
+            node(1, "android.widget.FrameLayout", listOf(0, 0, 1080, 2274), order = 1),                 // 列表
+            node(2, "android.widget.Button", listOf(0, 600, 1080, 800), text = "邮件行", clk = true),
+            node(1, "android.widget.FrameLayout", listOf(0, 0, 1080, 2274), order = 2),                 // 折叠的搜索视图：全屏透明框
+            node(2, "android.widget.EditText", listOf(42, 21, 1038, 147), text = "Search in mail", clk = true),
+            node(2, "android.view.View", listOf(0, 0, 1080, 2274)),                                      // 空的触摸拦截 View
+        )))
+        assertThat(r.elements.map { it.text }).contains("邮件行")
+    }
+
+    // ---- 标签长度 ----
+    @Test
+    fun longClickableLabelsAreLimitedToEightyChars() {
+        val long = "Delete " + "商品名".repeat(40)
+        val r = extract(window(listOf(node(0, "android.widget.Button", listOf(0, 0, 900, 100), desc = long, clk = true))))
+        val d = r.elements.single().desc!!
+        assertThat(d).startsWith(long.take(80))
+        assertThat(d).endsWith("…(共${long.length}字)")
+    }
+
+    @Test
+    fun longPlainTextKeepsTwoHundredChars() {
+        val long = "x".repeat(150)
+        val r = extract(window(listOf(node(0, b = listOf(0, 0, 900, 100), text = long))))
+        assertThat(r.elements.single().text).isEqualTo(long)
+    }
 }

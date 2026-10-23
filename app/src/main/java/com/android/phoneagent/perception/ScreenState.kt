@@ -47,4 +47,11 @@ data class UiElement(
     val checked: Boolean?,
     val enabled: Boolean,
     val password: Boolean = false,
+    /**
+     * 资源 id 线索：自己的资源 id，没有就取最近祖先的。网页里按钮的可见文字常常只是「Submit」，
+     * 真正的含义在 DOM id 上（例如 prime-signup-button），文字通用或没有文字时才会用到。
+     */
+    val idHint: String? = null,
+    /** [mergedText] 取自「中心落在它边界内的其他文字节点」而不是它的子节点（可能只是恰好叠在一起，不一定是它自己的文字） */
+    val mergedFromOverlap: Boolean = false,
 )

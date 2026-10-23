@@ -8,11 +8,11 @@ App: com.google.android.gm  标题: Sampl  屏幕: 1080x2400  元素: 15
 [7|erw4] Text "Sample text Sample tex"
 [8|8ax3] ImageButton "Add Cc/Bcc" [click]
 [9|gfb0] Button "To" [click]
-[10|v522] Button #peoplekit_autocomplete_chip_group [click]
+[10|v522] Button (无标签) #peoplekit_autocomplete_chip_group [click]
 [11|7wc6] EditText "To" [click,long-click,edit] focused
 [12|uqv3] EditText "Subject" [click,long-click,edit]
 [13|4qne] EditText = "Compose email" [edit] focused
-[14|b69q] Button #composearea_tap_trap_bottom [click]
+[14|b69q] Button (无标签) #composearea_tap_trap_bottom [click]
 [15|kmym] Button "Help me write" [click]
 
---- timings: wait=3ms reads=1 read=0ms extract=3ms screenshot=4ms serialize=0ms single-pass=7ms
+--- timings: wait=4ms reads=1 read=0ms extract=4ms screenshot=4ms serialize=1ms single-pass=9ms

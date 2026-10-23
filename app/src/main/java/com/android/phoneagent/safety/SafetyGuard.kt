@@ -10,8 +10,6 @@ import android.view.accessibility.AccessibilityNodeInfo
  * 注意：「Buy Now」会出现在商品页上，所以它只做控件级拦截，不做页面级锁定，否则商品页上的「Add to Cart」也点不了。
  */
 object SafetyGuard {
-    private val HARD = Regex("buy now|立即购买|place your order|提交订单|1-click|one-click|pay now|complete purchase", RegexOption.IGNORE_CASE)
-    private val LOCK = Regex("place your order|提交订单", RegexOption.IGNORE_CASE)
     private const val MARGIN = 24
 
     private const val GMAIL = "com.google.android.gm"
@@ -52,11 +50,9 @@ object SafetyGuard {
     private fun label(n: AccessibilityNodeInfo) = "${n.text ?: ""} ${n.contentDescription ?: ""}".trim()
 
     // 网页内容（WebView）里控件的可见文案可能是「Submit」，DOM id 才有语义（实测 Amazon：id=buy-now-button 的文案是 Submit），所以也匹配资源 id
-    private val HARD_ID = Regex("buy-?now|place-?(your-?)?order|submit-?order|one-?click|1-?click", RegexOption.IGNORE_CASE)
-    private val LOCK_ID = Regex("place-?(your-?)?order|submit-?order", RegexOption.IGNORE_CASE)
-
-    fun isHard(n: AccessibilityNodeInfo) = HARD.containsMatchIn(label(n)) || HARD_ID.containsMatchIn(n.viewIdResourceName ?: "")
-    fun isLock(n: AccessibilityNodeInfo) = LOCK.containsMatchIn(label(n)) || LOCK_ID.containsMatchIn(n.viewIdResourceName ?: "")
+    // 匹配规则在 SafetyRules（纯字符串，有单元测试）
+    fun isHard(n: AccessibilityNodeInfo) = SafetyRules.isHardLabel(label(n)) || SafetyRules.isHardId(n.viewIdResourceName)
+    fun isLock(n: AccessibilityNodeInfo) = SafetyRules.isLockLabel(label(n)) || SafetyRules.isLockId(n.viewIdResourceName)
 
     /** 命中硬拦截的控件：区域为控件自身与最近的可点击祖先的并集。 */
     fun hardControls(roots: List<AccessibilityNodeInfo>): List<Hard> {

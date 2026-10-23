@@ -25,7 +25,7 @@ App: com.google.android.calendar  标题: Sample t  屏幕: 1080x2400  元素: 2
 [24|6hvg] Text "Friday 27 November 2026, Open Day View"
 [25|b54c] Text "Black Friday, All day:"
 [26|27f3] ImageButton "Create new event and more" [click]
-[27|mtnc] Scrollable [scroll-down]
+[27|mtnc] Scrollable (无标签) #alternate_timeline_fragment_container [scroll-down]
 [28|tkxc] Text "Nov 29 – Dec 5"
 
---- timings: wait=12ms reads=1 read=0ms extract=12ms screenshot=6ms serialize=2ms single-pass=20ms
+--- timings: wait=12ms reads=1 read=0ms extract=12ms screenshot=7ms serialize=2ms single-pass=21ms

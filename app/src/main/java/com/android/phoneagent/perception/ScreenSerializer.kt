@@ -20,8 +20,12 @@ object ScreenSerializer {
         val sb = StringBuilder()
         sb.append('[').append(e.index).append('|').append(e.stableId).append("] ").append(e.type)
         val label = labelOf(e)
-        if (label != null) sb.append(' ').append(label)
-        else e.resourceId?.let { sb.append(" #").append(it.substringAfter('/')) }   // 没有文字的图标按钮，给个资源 id 线索
+        if (label != null) sb.append(' ').append(label) else sb.append(" (无标签)")
+        // 没有文字，或文字只是「Submit」这类通用词（即使取到了覆盖文字也不一定可靠）：附上资源 id 线索（网页里真实含义常常只在 DOM id 里）
+        val own = e.text ?: e.desc
+        if ((label == null || GenericLabels.isGeneric(own)) && e.idHint != null) {
+            sb.append(" #").append(e.idHint.substringAfter('/'))
+        }
         if (e.password) sb.append(" [password]")
         if (e.actions.isNotEmpty()) sb.append(" [").append(e.actions.joinToString(",") { it.label }).append(']')
         e.checked?.let { sb.append(if (it) " checked" else " unchecked") }
@@ -42,8 +46,14 @@ object ScreenSerializer {
                 else -> null
             }
         }
-        val main = e.text ?: e.desc ?: e.mergedText ?: return null
-        val extra = if (e.text != null && e.desc != null && e.desc != e.text) " (${oneLine(e.desc)})" else ""
+        val main = e.text ?: e.desc ?: e.hint ?: e.mergedText ?: return null
+        val extra = when {
+            e.text != null && e.desc != null && e.desc != e.text -> " (${oneLine(e.desc)})"
+            // 通用文字（Submit）+ 覆盖它的真实文字：「Submit」(Try Prime for ...)
+            (e.text != null || e.desc != null) && e.mergedText != null && e.mergedText != main ->
+                " (" + (if (e.mergedFromOverlap) "覆盖文字: " else "") + oneLine(e.mergedText) + ")"
+            else -> ""
+        }
         return q(main) + extra
     }
 

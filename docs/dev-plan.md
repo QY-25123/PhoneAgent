@@ -59,6 +59,10 @@ ui ──▶ task ──▶ agent ──▶ perception ──▶ privileged
 ## M3 安全
 - **目标**：把 PRD 6.7 的规则做成**不依赖模型**的硬拦截，并实现 Gmail 发送确认和 Amazon 交接。
 - **涉及模块**：`safety`（`SafetyGuard`、`UserActivityGuard`、`ConfirmToken`）、`agent`（动作必经 `safety`）、`task`。
+- **来自 M1 样本的约束（实现时必须覆盖）**：
+  1. **购物车页有两处 Delete**：购物车里的商品和「Saved for later」里的商品各有一个 `Delete`（后者要滚动才可见，Move to cart 也在那里）。购物车修改的拦截放行必须**按商品标识和所在区块**绑定，不能只按「Delete」文字。
+  2. **按钮文字只是通用词（Submit）时，真实含义只在资源 id 上**：Prime 订阅按钮文字是 `Submit`，id 在父节点（`prime-signup-button`、`stripe-cta`）。硬拦截必须按资源 id 匹配（M1 已加入 `SafetyRules`，`scripts/m1_safety_prime.sh` 在设备上验证过）；购物车修改的放行同样不能只看文字。
+  3. 感知给模型的元素文本里，通用文字的按钮带资源 id 线索，「覆盖文字」标注不一定是按钮自己的文字。
 - **顺序**：**先写测试，再实现**。
   1. 拦截规则测试（表驱动）：**购物车修改（FR-SAFE-14）**——无令牌时删除/数量加减/数量输入/「稍后购买」全部拦截，有令牌时只放行清单内的那几项；Buy Now / Place your order / 提交订单 / 立即购买 / `buy-now-button`、`placeOrder` 等 resource-id；Try Prime / Join Prime；删除类；密码/验证码输入框；Gmail 发送按钮（无令牌）；文字、描述、resource-id 三种匹配；页面级锁（提交订单页）。
   2. 确认令牌测试（`ConfirmToken` 通用：Gmail 与购物车共用一套）：令牌绑定「收件人 + 主题 + 正文」的哈希，或购物车的「改动清单（商品标识、动作、目标数量）」，一次性；购物车按项消耗，购物车内容与确认时不一致整体作废；内容变了令牌作废；过期/重复使用无效；未确认不可放行。

@@ -11,7 +11,19 @@ class ExtractOptions(
     val minSizePx: Int = 2,
     /** 可点击父节点面积超过屏幕的这个比例时，不吞并里面的文字（防止整页被一个可点击容器吃掉） */
     val maxAbsorbAreaRatio: Double = 0.5,
+    /** 同一窗口内：面积至少占屏幕这个比例、内部足够「满」的后绘制子树，被认为遮住了它下面的元素 */
+    val occluderMinAreaRatio: Double = 0.2,
+    /** 子树叶子节点覆盖其区域的比例达到这个值才算「不透明」（稀疏的透明容器，例如折叠的搜索栏，不算） */
+    val occluderMinFill: Double = 0.5,
 )
+
+/** 通用文字：按钮上只有这种词时看不出真实含义，需要取覆盖它的文字或资源 id。 */
+object GenericLabels {
+    private val WORDS = setOf(
+        "submit", "button", "ok", "okay", "continue", "next", "done", "confirm", "yes", "go", "click", "link", "image", "icon", "view", "more",
+    )
+    fun isGeneric(s: String?) = s != null && s.trim().trimEnd('.').lowercase() in WORDS
+}
 
 class Extraction(
     val elements: List<UiElement>,
@@ -52,6 +64,14 @@ object ElementExtractor {
                 val c = node.bounds.intersect(winBounds)
                 if (node.visible && c != null && c.width >= opts.minSizePx && c.height >= opts.minSizePx) clip[i] = c
             }
+            val subtreeEnd = IntArray(n)   // 不含：i 的子树是 [i, subtreeEnd[i])
+            for (i in n - 1 downTo 0) {
+                var e = i + 1
+                while (e < n && w.nodes[e].depth > w.nodes[i].depth) e = subtreeEnd[e]
+                subtreeEnd[i] = e
+            }
+            val paint = paintRank(w.nodes, parent)
+            val occluders = findOccluders(w.nodes, clip, subtreeEnd, screen, opts)
             // WebView 空壳：可见、面积 ≥ 屏幕 20%、下一个节点不是它的子节点
             for (i in 0 until n) {
                 val node = w.nodes[i]
@@ -89,22 +109,42 @@ object ElementExtractor {
                 val cx = c.centerX; val cy = c.centerY
                 if (windows.any { o -> o.layer > w.layer && o.bounds.contains(cx, cy) }) continue
 
-                val own = node.text?.isNotBlank() == true || node.desc?.isNotBlank() == true
-                val merged = if (!own) absorbedTexts[i]?.let { mergeTexts(it, opts.maxMergedChars) } else null
+                // 同一窗口内被后绘制的「满」子树盖住（例如底部弹出的新建事项面板盖住下面的工具栏）
+                if (occluders.any { (oi, ob) -> (oi >= subtreeEnd[i] || oi < i) && paint[oi] > paint[i] && ob.contains(cx, cy) }) continue
+
+                val ownLabel = node.text?.takeIf { it.isNotBlank() } ?: node.desc?.takeIf { it.isNotBlank() }
+                val own = ownLabel != null
+                val generic = GenericLabels.isGeneric(ownLabel)
+                var fromOverlap = false
+                var merged = if (!own || generic) absorbedTexts[i]?.let { mergeTexts(it, opts.maxMergedChars) } else null
+                if (generic && merged == null) {
+                    // 通用文字的按钮：取中心落在它边界内的其他文字节点（网页里按钮文字常是兄弟节点）
+                    val over = ArrayList<String>()
+                    for (j in 0 until n) {
+                        val o = w.nodes[j]
+                        val oc = clip[j] ?: continue
+                        if (j == i || o.text.isNullOrBlank() || GenericLabels.isGeneric(o.text) || isActionable(o) || o.text.count { it.isLetter() } < 3) continue
+                        if (c.contains(oc.centerX, oc.centerY)) over.add(normalizeSpace(o.text))
+                    }
+                    if (over.isNotEmpty()) { merged = mergeTexts(over, opts.maxMergedChars); fromOverlap = true }
+                }
+                // 可点击元素的标签统一按合并标签的长度限制（Gmail 邮件行、Amazon 的「Delete <商品名>」描述都很长）；纯文字保留更长
+                val ownLimit = if (node.clickable) opts.maxMergedChars else opts.maxOwnTextChars
+                val idHint = node.resourceId ?: ancestorId(w.nodes, parent, i)
                 found.add(
                     Cand(
                         key = Triple(c, normalizeLabel(node, merged), kindOf(node)),
                         order = found.size,
                         el = UiElement(
                             index = 0, stableId = "", type = typeOf(node),
-                            text = node.text?.takeIf { it.isNotBlank() && !node.showingHint }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
-                            desc = node.desc?.takeIf { it.isNotBlank() }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
+                            text = node.text?.takeIf { it.isNotBlank() && !node.showingHint }?.let { truncate(normalizeSpace(it), ownLimit) },
+                            desc = node.desc?.takeIf { it.isNotBlank() }?.let { truncate(normalizeSpace(it), ownLimit) },
                             hint = (node.hint?.takeIf { it.isNotBlank() } ?: node.text?.takeIf { node.showingHint && it.isNotBlank() })
                                 ?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
                             mergedText = merged, resourceId = node.resourceId, className = node.className, bounds = c,
                             actions = actionsOf(node), focused = node.focused,
                             checked = if (node.checkable) node.checked else null,
-                            enabled = !node.disabled, password = node.password,
+                            enabled = !node.disabled, password = node.password, idHint = idHint, mergedFromOverlap = fromOverlap,
                         ),
                     )
                 )
@@ -122,6 +162,68 @@ object ElementExtractor {
             webViewEmpty = webViewEmpty,
             truncatedTree = snap.truncated,
         )
+    }
+
+    /**
+     * 绘制次序：先序遍历，同一父节点的子节点按 drawingOrder（再按树里顺序）排。数值大的画在上面。
+     * 无障碍树里的子节点顺序不是绘制顺序（例如协调布局里的底部面板先出现在树里，却画在工具栏上面）。
+     */
+    internal fun paintRank(nodes: List<RawNode>, parent: IntArray): IntArray {
+        val n = nodes.size
+        val children = Array(n + 1) { ArrayList<Int>() }   // 下标 n 是虚拟根
+        for (i in 0 until n) children[if (parent[i] < 0) n else parent[i]].add(i)
+        val rank = IntArray(n)
+        var next = 0
+        // 用显式栈避免深树栈溢出
+        val stack = ArrayDeque<Int>().apply { add(n) }
+        while (stack.isNotEmpty()) {
+            val i = stack.removeLast()
+            if (i < n) rank[i] = next++
+            children[i].sortedWith(compareBy({ nodes[it].drawingOrder }, { it })).asReversed().forEach { stack.addLast(it) }
+        }
+        return rank
+    }
+
+    /** 最近祖先（最多向上 4 层）的资源 id，跳过系统通用 id。 */
+    private fun ancestorId(nodes: List<RawNode>, parent: IntArray, i: Int): String? {
+        var p = parent[i]; var k = 0
+        while (p >= 0 && k++ < 4) {
+            val id = nodes[p].resourceId
+            if (id != null && !id.startsWith("android:id/")) return id
+            p = parent[p]
+        }
+        return null
+    }
+
+    /** 「有实际内容」的节点：可操作，或有文字/描述，或是图片/文字/按钮类控件。空的 View/FrameLayout（透明的触摸拦截层）不算。 */
+    private fun isFootprint(n: RawNode): Boolean {
+        if (n.clickable || n.longClickable || n.editable || n.checkable) return true
+        if (!n.text.isNullOrBlank() || !n.desc.isNullOrBlank()) return true
+        val c = n.className.substringAfterLast('.')
+        return c.endsWith("ImageView") || c.endsWith("ImageButton") || c.endsWith("TextView") || c.endsWith("Button") || c.endsWith("Switch") || c.endsWith("CheckBox")
+    }
+
+    /**
+     * 同一窗口内「盖住别人」的节点：可见、面积不小、画得更靠后（见 [paintRank]）、且内部足够满（有内容的节点覆盖区域的比例够高）。
+     * 返回 (节点下标, 它的裁剪后边界)。稀疏或空的透明容器（折叠的搜索栏全屏框、拦截触摸的透明 View）覆盖率低，不算遮挡。
+     */
+    internal fun findOccluders(nodes: List<RawNode>, clip: Array<Bounds?>, subtreeEnd: IntArray, screen: Bounds, opts: ExtractOptions): List<Pair<Int, Bounds>> {
+        val out = ArrayList<Pair<Int, Bounds>>()
+        val minArea = screen.area * opts.occluderMinAreaRatio
+        for (i in nodes.indices) {
+            val b = clip[i] ?: continue
+            if (b.area < minArea || subtreeEnd[i] - i < 3) continue
+            val cell = 40
+            val cols = (b.width + cell - 1) / cell; val rows = (b.height + cell - 1) / cell
+            val covered = BooleanArray(cols * rows)
+            for (j in i + 1 until subtreeEnd[i]) {
+                if (!isFootprint(nodes[j])) continue
+                val lb = clip[j]?.intersect(b) ?: continue
+                for (r in (lb.top - b.top) / cell..(lb.bottom - 1 - b.top) / cell) for (c in (lb.left - b.left) / cell..(lb.right - 1 - b.left) / cell) covered[r * cols + c] = true
+            }
+            if (covered.count { it }.toDouble() / covered.size >= opts.occluderMinFill) out.add(i to b)
+        }
+        return out
     }
 
     private class Cand(val key: Triple<Bounds, String, String>, val order: Int, val el: UiElement)

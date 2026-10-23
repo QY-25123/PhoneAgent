@@ -84,6 +84,31 @@ class SamplesTest {
         r.elements.require("Button", "Submit")   // 订阅按钮：感知照常列出，拦截是 safety 的事
     }
 
+    /** M1 修复：两个文字只是「Submit」的 Prime 订阅按钮，必须带上能看出真实含义的线索（资源 id） */
+    @Test fun primeSubscribeButtonsExposeTheirMeaning() {
+        val popup = load("amz_after_proceed").elements.filter { it.text == "Submit" }
+        assertThat(popup).isNotEmpty()
+        for (e in popup) assertThat(e.idHint).contains("prime-signup")
+        val cart = load("amz_cart").elements.filter { it.text == "Submit" }
+        assertThat(cart).isNotEmpty()
+        for (e in cart) assertThat(e.idHint).contains("stripe-cta")
+        for (e in popup + cart) assertThat(ScreenSerializer.line(e)).contains("#${e.idHint}")
+    }
+
+    /** M1 修复：新建事项面板盖住了下面的日历工具栏，被盖住的元素不应该出现 */
+    @Test fun elementsCoveredByTheNewEventSheetAreNotListed() {
+        val labels = load("cal_new_event").elements.map { label(it) }
+        assertThat(labels.none { it.contains("Jump to Today") || it.contains("Show date picker") }).isTrue()
+    }
+
+    @Test fun clickableLabelsAreAtMostEightyCharsPlusMarker() {
+        for (name in all) for (e in load(name).elements) {
+            if (ElementAction.CLICK in e.actions) {
+                for (t in listOfNotNull(e.text, e.desc)) assertThat(t.length).isAtMost(80 + "…(共1000字)".length)
+            }
+        }
+    }
+
     @Test fun amazonCheckout() {
         val r = load("amz_checkout")
         r.elements.require("Button", "Place your order", action = ElementAction.CLICK)   // 感知不过滤它

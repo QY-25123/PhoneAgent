@@ -4,10 +4,10 @@ package com.android.phoneagent.perception
 fun node(
     depth: Int, cls: String = "android.widget.TextView", b: List<Int>, res: String? = null, text: String? = null, desc: String? = null,
     hint: String? = null, vis: Boolean = true, clk: Boolean = false, edit: Boolean = false, scr: Boolean = false,
-    foc: Boolean = false, sh: Boolean = false, chkable: Boolean = false, chk: Boolean = false, sf: Boolean = false, sb: Boolean = false,
+    foc: Boolean = false, sh: Boolean = false, chkable: Boolean = false, chk: Boolean = false, sf: Boolean = false, sb: Boolean = false, order: Int = 0,
 ) = RawNode(
     depth, cls, Bounds(b[0], b[1], b[2], b[3]), res, text, desc, hint, vis, clickable = clk, editable = edit, scrollable = scr,
-    focused = foc, showingHint = sh, checkable = chkable, checked = chk, scrollForward = sf, scrollBackward = sb,
+    focused = foc, showingHint = sh, drawingOrder = order, checkable = chkable, checked = chk, scrollForward = sf, scrollBackward = sb,
 )
 
 fun window(

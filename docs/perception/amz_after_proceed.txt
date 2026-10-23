@@ -1,6 +1,6 @@
 App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 30
 [1|eq1n] Button "CANCEL" (Cancel) [click]
-[2|fya3] WebView [scroll-down] focused
+[2|fya3] WebView (无标签) #mash_web_fragment [scroll-down] focused
 [3|sy8z] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample t"
 [4|age3] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample te"
 [5|b8b6] Text "Without Prime"
@@ -24,10 +24,10 @@ App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x24
 [23|eur2] Text ")."
 [24|qb0e] Text "Sample text Sample text Sample text S"
 [25|jjgr] Button "here" [click]
-[26|4bdd] Button "Submit" [click]
+[26|y14n] Button "Submit" (覆盖文字: Select a payment method for Prime) #prime-signup-button [click]
 [27|dp6y] Text "Select a payment method for Prime"
-[28|x65g] Checkbox #pmts-preference-summary-consent-checkbox [click]
+[28|x65g] Checkbox (无标签) #pmts-preference-summary-consent-checkbox [click]
 [29|tv8k] Text "Visa****0000"
 [30|n2w5] Button "No thanks" [click]
 
---- timings: wait=14ms reads=1 read=0ms extract=14ms screenshot=9ms serialize=3ms single-pass=26ms
+--- timings: wait=19ms reads=1 read=0ms extract=19ms screenshot=6ms serialize=4ms single-pass=29ms

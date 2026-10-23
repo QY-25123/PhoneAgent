@@ -43,6 +43,7 @@ class ScreenSerializerTest {
         val l = ScreenSerializer.line(state(
             node(0, "android.widget.ImageButton", listOf(0, 100, 200, 200), res = "com.google.android.gm:id/compose_button", clk = true),
         ).elements.single())
+        assertThat(l).contains("(无标签)")
         assertThat(l).contains("#compose_button")
     }
 
@@ -70,5 +71,22 @@ class ScreenSerializerTest {
         assertThat(text).startsWith("App: 未知")
         assertThat(text).contains("元素: 0")
         assertThat(text).contains("界面树为空")
+    }
+
+    @Test
+    fun unlabeledElementWithoutAnyIdIsStillMarked() {
+        val l = ScreenSerializer.line(state(node(0, "android.widget.ImageButton", listOf(0, 100, 200, 200), clk = true)).elements.single())
+        assertThat(l).contains("(无标签)")
+        assertThat(l).doesNotContain("#")
+    }
+
+    @Test
+    fun overlappingTextIsMarkedAsNotNecessarilyTheButtonsOwn() {
+        val l = ScreenSerializer.line(state(
+            node(0, "android.widget.Button", listOf(0, 1000, 1000, 1100), text = "Submit", clk = true, res = "app:id/prime-signup-button"),
+            node(0, b = listOf(100, 1020, 900, 1080), text = "Continue with Prime"),
+        ).elements.first { it.type == "Button" })
+        assertThat(l).contains("\"Submit\" (覆盖文字: Continue with Prime)")
+        assertThat(l).contains("#prime-signup-button")
     }
 }

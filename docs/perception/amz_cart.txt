@@ -1,13 +1,13 @@
-App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 57
+App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 48
 [1|8vq9] ImageButton "Search" [click]
 [2|2bu4] Button "scan it" [click]
-[3|cxd4] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sam" [click]
-[4|2uhz] Scrollable #subnav_scrollable_container [scroll-down]
+[3|w8fq] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共99字)" [click]
+[4|2uhz] Scrollable (无标签) #subnav_scrollable_container [scroll-down]
 [5|dvek] Button "Cart Button 0 of 3" [click]
 [6|8hey] Button "Lists Button 1 of 3" [click]
 [7|ykcw] Button "Buy Again Button 2 of 3" [click]
 [8|6ye9] Button "Keep shopping for Button 3 of 3" [click]
-[9|fya3] WebView [scroll-down] focused
+[9|fya3] WebView (无标签) #mash_web_fragment [scroll-down] focused
 [10|6yeh] Text "Subtotal (1 item): $7.99"
 [11|hy9h] Text "Fees & taxes calculated at checkout"
 [12|n1d2] Text "Add"
@@ -16,45 +16,36 @@ App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x24
 [15|d1d1] Button "Join Prime" [click]
 [16|x45u] Text "Sample text Sample text Sample text Sample text Sample text S"
 [17|4j87] Button "Proceed to checkout" [click]
-[18|cnj3] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text S" [click]
-[19|2nj0] Text "Amazon Visa"
-[20|04wx] Text "Pay"
-[21|b2gf] Text "$7.99"
-[22|vh2a] Text "$0.00"
-[23|f3z7] Text "for this order."
-[24|2558] Text "Get"
-[25|yz2s] Text "$50"
-[26|6x70] Text "Sample text Sample text Sample"
-[27|n0g8] Text "off"
-[28|b2y1] Text "See details"
-[29|2cqa] Button "Deselect all items" [click]
-[30|wz4e] Checkbox "Select Sample Product Title" [click]
-[31|v7sp] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text S" [click]
-[32|79p0] Text "1K+ bought in past month"
-[33|hmty] Text "$7.99"
-[34|7kn6] Button "Join Prime to buy this item at Sample Product Title" [click]
-[35|pdtr] Text "FREE delivery"
-[36|qzfz] Text "Sample text Sample text Sample te"
-[37|wbab] Text "Wed, Oct 28"
-[38|7u9c] Button "FREE Returns" [click]
-[39|xyep] Text "In Stock"
-[40|d23q] Button "Sustainability features" [click]
-[41|v996] Button "Share Sample Product Title" [click]
-[42|n0jr] Button "Delete Sample Product Title" [click]
-[43|emqg] Button "Save Sample Product Title" [click]
-[44|ggx1] Button "Delete Sample Product Title" [click]
-[45|64w5] Button "Increase quantity by one, Quantity is 1, Sample Product Title" [click]
-[46|7c5m] Text "1"
-[47|dxf3] Text "1"
-[48|a6em] Button "View more actions for Sample Product Title" [click]
-[49|q0vs] Button "Alexa Ask a question" [click]
-[50|a2z3] Text "Amazon Prime Logo"
-[51|pm40] Text "Join Prime Young Adults for 18-24 year olds."
-[52|4bdd] Button "Submit" [click]
-[53|4rfe] Button "Home Tab 1 of 5" [click]
-[54|8avr] Button "Sample text Sample text Sa" [click]
-[55|jfy1] Button "Cart 1 item Tab 3 of 5 1" [click]
-[56|nt72] Button "Browse menu Tab 4 of 5" [click]
-[57|rbza] Button "Alexa Tab 5 of 5" [click]
+[18|mwud] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共217字)" [click]
+[19|q6rz] Text "Sample text Sampl"
+[20|6g4a] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text"
+[21|2cqa] Button "Deselect all items" [click]
+[22|uxke] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共193字)" [click]
+[23|79p0] Text "1K+ bought in past month"
+[24|b2gf] Text "$7.99"
+[25|7kn6] Button "Join Prime to buy this item at Sample Product Title" [click]
+[26|pdtr] Text "FREE delivery"
+[27|qzfz] Text "Sample text Sample text Sample te"
+[28|wbab] Text "Wed, Oct 28"
+[29|7u9c] Button "FREE Returns" [click]
+[30|xyep] Text "In Stock"
+[31|d23q] Button "Sustainability features" [click]
+[32|v996] Button "Share Sample Product Title" [click]
+[33|n0jr] Button "Delete Sample Product Title" [click]
+[34|emqg] Button "Save Sample Product Title" [click]
+[35|ggx1] Button "Delete Sample Product Title" [click]
+[36|64w5] Button "Increase quantity by one, Quantity is 1, Sample Product Title" [click]
+[37|7c5m] Text "1"
+[38|dxf3] Text "1"
+[39|a6em] Button "View more actions for Sample Product Title" [click]
+[40|q0vs] Button "Alexa Ask a question" [click]
+[41|a2z3] Text "Amazon Prime Logo"
+[42|pm40] Text "Join Prime Young Adults for 18-24 year olds."
+[43|4bdd] Button "Submit" #stripe-cta [click]
+[44|4rfe] Button "Home Tab 1 of 5" [click]
+[45|8avr] Button "Sample text Sample text Sa" [click]
+[46|jfy1] Button "Cart 1 item Tab 3 of 5 1" [click]
+[47|nt72] Button "Browse menu Tab 4 of 5" [click]
+[48|rbza] Button "Alexa Tab 5 of 5" [click]
 
---- timings: wait=18ms reads=1 read=0ms extract=18ms screenshot=9ms serialize=4ms single-pass=31ms
+--- timings: wait=26ms reads=1 read=0ms extract=25ms screenshot=5ms serialize=4ms single-pass=34ms

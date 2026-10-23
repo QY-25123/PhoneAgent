@@ -1,7 +1,7 @@
 App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 33
 [1|cvuv] ImageButton "Back" [click]
 [2|eq1n] Button "CANCEL" (Cancel) [click]
-[3|fya3] WebView [scroll-down] focused
+[3|fya3] WebView (无标签) #mash_web_fragment [scroll-down] focused
 [4|3zcd] Text "Sample text Sample text Sample text Sample t"
 [5|tqz0] Button "privacy notice" [click]
 [6|z8z6] Text "and"
@@ -21,7 +21,7 @@ App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x24
 [20|89en] Text "Sunday, Oct. 25"
 [21|h29n] Text "Sample text Sample t"
 [22|m2bp] Button "Join Prime" [click]
-[23|a5p7] Checkbox #setOrderingPrefsCheckbox [click]
+[23|a5p7] Checkbox (无标签) #setOrderingPrefsCheckbox [click]
 [24|028j] Text "Default to this delivery address and payment method."
 [25|wnsu] Button "Paying with Visa 0000 Change payment method" [click]
 [26|3bzt] Button "Use Prime for Young Adults cash back" [click]
@@ -33,4 +33,4 @@ App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x24
 [32|r027] Button "Change delivery address" [click]
 [33|uyrh] Text "Choose your delivery option:"
 
---- timings: wait=10ms reads=1 read=0ms extract=10ms screenshot=5ms serialize=2ms single-pass=17ms
+--- timings: wait=17ms reads=1 read=0ms extract=16ms screenshot=6ms serialize=2ms single-pass=24ms
