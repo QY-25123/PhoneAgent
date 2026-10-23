@@ -219,6 +219,7 @@ object Agent {
     private var catchUpPending = false
     val framesAvailable = java.util.concurrent.atomic.AtomicLong()   // ImageReader 回调次数（虚拟屏实际产出的帧）
     val framesProcessed = java.util.concurrent.atomic.AtomicLong()   // 转成位图并交给界面的帧
+    val uiFrames = java.util.concurrent.atomic.AtomicLong()          // 界面实际收到并重组的帧（MainActivity 里统计）
 
     private fun onFrame(r: ImageReader) {
         framesAvailable.incrementAndGet()
@@ -261,16 +262,17 @@ object Agent {
     }
 
     /** debug：在虚拟屏上持续上下滑动 [seconds] 秒，统计虚拟屏产出的帧数和实际转成预览的帧数。 */
-    fun fpsTest(seconds: Int) = call("fps 测试", executor = readIo) { p ->
-        framesAvailable.set(0); framesProcessed.set(0)
+    fun fpsTest(seconds: Int, swipe: Boolean = true) = call("fps 测试", executor = readIo) { p ->
+        framesAvailable.set(0); framesProcessed.set(0); uiFrames.set(0)
         val end = System.currentTimeMillis() + seconds * 1000L
         var up = true
         while (System.currentTimeMillis() < end) {
+            if (!swipe) { Thread.sleep(100); continue }
             if (up) p.swipe(displayId, 540f, 1900f, 540f, 500f, 350) else p.swipe(displayId, 540f, 500f, 540f, 1900f, 350)
             up = !up
         }
         Thread.sleep(500)
-        report("FPS 结果：${seconds}s 内虚拟屏产出 ${framesAvailable.get()} 帧（${framesAvailable.get() / seconds.toFloat()} fps），转成预览 ${framesProcessed.get()} 帧（${framesProcessed.get() / seconds.toFloat()} fps），previewFps=$previewFps")
+        report("FPS 结果：${seconds}s 内虚拟屏产出 ${framesAvailable.get()} 帧（${framesAvailable.get() / seconds.toFloat()} fps），转成预览 ${framesProcessed.get()} 帧（${framesProcessed.get() / seconds.toFloat()} fps），界面显示 ${uiFrames.get()} 帧（${uiFrames.get() / seconds.toFloat()} fps），previewFps=$previewFps")
     }
 
     private fun stopReader() {

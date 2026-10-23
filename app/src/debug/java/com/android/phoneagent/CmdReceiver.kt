@@ -20,7 +20,7 @@ class CmdReceiver : BroadcastReceiver() {
             "tasks" -> Agent.listTasks(intent.getIntExtra("display", Agent.displayId))
             "movetask" -> Agent.moveTask(intent.getIntExtra("task", -1), intent.getIntExtra("display", 0))
             "overlay" -> Agent.overlay(intent.getStringExtra("op") ?: "on", intent.getStringExtra("t") ?: "")
-            "fps" -> Agent.fpsTest(intent.getIntExtra("sec", 10))
+            "fps" -> Agent.fpsTest(intent.getIntExtra("sec", 10), intent.getBooleanExtra("swipe", true))
             "tap" -> Agent.tap(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 1200).toFloat())
             "swipe" -> Agent.swipe(540f, 1800f, 540f, 600f)
             "back" -> Agent.back()

@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
         <!-- 仅 debug 版本：adb 自测入口。要求发送方持有 DUMP（signature 级，仅 shell/系统可持有），其他 App 无法调用 -->
+        <activity android:name=".FpsTestActivity" android:exported="true" />
+
         <receiver
             android:name=".CmdReceiver"
             android:exported="true"

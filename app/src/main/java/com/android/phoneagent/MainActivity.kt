@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,7 +78,10 @@ class MainActivity : ComponentActivity() {
                             Button(onClick = { Agent.dumpTree() }) { Text("dump 界面树") }
                             Button(onClick = { Agent.stop() }) { Text("停止") }
                         }
-                        Agent.preview?.let { Image(it, "preview", Modifier.height(480.dp)) }
+                        Agent.preview?.let {
+                            SideEffect { Agent.uiFrames.incrementAndGet() }   // 统计界面实际收到的帧（UV-1）
+                            Image(it, "preview", Modifier.height(480.dp))
+                        }
                     }
                 }
             }
