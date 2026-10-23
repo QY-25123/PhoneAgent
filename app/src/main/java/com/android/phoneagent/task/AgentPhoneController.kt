@@ -88,7 +88,7 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
             Action.PressEnter -> run("回车") { Agent.withPriv("回车", guarded = true) { it.pressKey(displayId, android.view.KeyEvent.KEYCODE_ENTER) }; ActionOutcome(true, "ok") }
             is Action.Wait, is Action.AskUser, is Action.Done -> ActionOutcome(true, "不需要执行")
         }
-        if (out.ok) delay(400)   // 给界面一点反应时间，之后的感知还会等它稳定
+        if (out.ok) delay(250)   // 给界面一点反应时间，之后的感知还会等它稳定
         return out
     }
 

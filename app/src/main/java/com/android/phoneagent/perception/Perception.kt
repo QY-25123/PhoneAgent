@@ -11,8 +11,8 @@ interface PerceptionSource : SnapshotSource {
 class PerceiveOptions(
     val waitForStable: Boolean = true,
     val annotate: Boolean = true,
-    val jpegWidth: Int = 720,
-    val jpegQuality: Int = 70,
+    val jpegWidth: Int = 540,   // 给模型的图小一点：更少 token、更快
+    val jpegQuality: Int = 65,
     val extract: ExtractOptions = ExtractOptions(),
     val stability: StabilityOptions = StabilityOptions(),
 )

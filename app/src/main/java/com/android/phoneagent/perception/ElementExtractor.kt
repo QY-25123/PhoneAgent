@@ -299,7 +299,8 @@ object ElementExtractor {
         listOf(n.text, n.desc, n.hint, merged).joinToString("|") { normalizeSpace(it ?: "").lowercase() }
 
     internal fun normalizeSpace(s: String) =
-        s.replace(Regex("\\s+"), " ").replace(Regex("(\\s*,){2,}"), ",").trim()
+        // 不换行空格（\u00a0）、窄不换行空格（\u202f，12 小时制时间 "3:00 PM" 里就是它）、细空格也当空格
+        s.replace(Regex("[\\s\u00a0\u202f\u2009]+"), " ").replace(Regex("(\\s*,){2,}"), ",").trim()
 
     internal fun truncate(s: String, max: Int): String =
         if (s.length <= max) s else s.take(max) + "…(共${s.length}字)"

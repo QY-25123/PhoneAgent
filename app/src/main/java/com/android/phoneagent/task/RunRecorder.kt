@@ -27,7 +27,7 @@ class RunRecorder(private val dir: File) : RunLog {
         calls++
         if (resp != null) { usage += resp.usage; modelMs += resp.latencyMs }
         write("call_%02d_%s.json".format(calls, req.label), JSONObject().apply {
-            put("label", req.label); put("effort", req.effort)
+            put("label", req.label); put("effort", req.effort); put("model", resp?.model ?: req.model)
             put("system", req.system)
             put("user", req.messages.joinToString("\n---\n") { it.text })
             put("images", req.messages.sumOf { it.jpegImages.size })

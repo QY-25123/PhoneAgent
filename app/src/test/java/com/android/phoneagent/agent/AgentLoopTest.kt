@@ -195,4 +195,59 @@ class AgentLoopTest {
         assertThat(t).contains("失败（没有应用能处理）")
         assertThat(t).contains("open_app calendar")
     }
+
+    // ---- 日历快速通道 ----
+    private val savedList = screenOf("日程", "[PA测试] 评审会 15:00")
+
+    @Test fun fastPathSavesWithoutAskingTheModelForTheStep() = runTest {
+        val model = FakeModel(listOf(verifyJson(true)))
+        val phone = FakePhone({ if (it == 0) editorScreen() else savedList })
+        val host = FakeHost()
+        val r = loop(model, phone, host).run(TASK) as LoopResult.Success
+        assertThat(r.steps).isEqualTo(1)
+        assertThat(r.modelCalls).isEqualTo(1)      // 只有一次自查
+        assertThat(phone.executed).containsExactly(Action.Tap(2))   // 「保存」
+        assertThat(host.steps.single().did).contains("保存")
+        assertThat(model.requests.single().label).isEqualTo("verify")
+    }
+
+    @Test fun fastPathAcceptsTwentyFourHourTimes() = runTest {
+        val phone = FakePhone({ if (it == 0) editorScreen(start = "15:00", end = "16:00") else savedList })
+        val r = loop(FakeModel(listOf(verifyJson(true))), phone).run(TASK) as LoopResult.Success
+        assertThat(r.modelCalls).isEqualTo(1)
+    }
+
+    @Test fun fastPathIsSkippedWhenAnyFieldDoesNotMatch() = runTest {
+        for (bad in listOf(editorScreen(title = "别的标题"), editorScreen(start = "4:00 PM"), editorScreen(end = "5:00 PM"), editorScreen(date = "Wed, Oct 28, 2026"))) {
+            val model = FakeModel(listOf(tap, done, verifyJson(true)))
+            val phone = FakePhone({ if (it == 0) bad else changing(it) })
+            val r = loop(model, phone).run(TASK) as LoopResult.Success
+            assertThat(model.requests.map { it.label }).containsExactly("step", "step", "verify").inOrder()
+            assertThat(model.requests[0].messages.single().text).contains("本地核对")
+            assertThat(r.steps).isEqualTo(1)
+        }
+    }
+
+    @Test fun fastPathIsSkippedWhenTheIntentLaunchFailed() = runTest {
+        val model = FakeModel(listOf(done, verifyJson(true)))
+        val phone = FakePhone({ editorScreen() }, insert = ActionOutcome(false, "x"))
+        loop(model, phone).run(TASK)
+        assertThat(model.requests.first().label).isEqualTo("step")
+    }
+
+    @Test fun failedSelfCheckAfterFastSaveHandsOverToTheModel() = runTest {
+        val model = FakeModel(listOf(verifyJson(false, "列表里没看到事项"), done, verifyJson(true)))
+        val phone = FakePhone({ if (it == 0) editorScreen() else savedList })
+        val r = loop(model, phone).run(TASK) as LoopResult.Success
+        assertThat(model.requests.map { it.label }).containsExactly("verify", "step", "verify").inOrder()
+        assertThat(model.requests[1].messages.single().text).contains("自查未通过：列表里没看到事项")
+        assertThat(r.steps).isEqualTo(1)
+    }
+
+    @Test fun fastPathCanBeDisabled() = runTest {
+        val model = FakeModel(listOf(tap, done, verifyJson(true)))
+        val phone = FakePhone({ if (it == 0) editorScreen() else savedList })
+        loop(model, phone, cfg = LoopConfig(calendarFastPath = false)).run(TASK)
+        assertThat(model.requests.first().label).isEqualTo("step")
+    }
 }

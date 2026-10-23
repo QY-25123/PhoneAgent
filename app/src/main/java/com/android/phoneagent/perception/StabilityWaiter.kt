@@ -8,7 +8,7 @@ fun interface SnapshotSource {
 }
 
 class StabilityOptions(
-    val pollMs: Long = 150,
+    val pollMs: Long = 100,
     /** 连续多少次读取的元素签名一致才算稳定 */
     val stableRounds: Int = 2,
     /** 普通页面等待稳定的上限 */

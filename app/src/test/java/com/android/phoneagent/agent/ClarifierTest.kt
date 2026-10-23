@@ -73,6 +73,13 @@ class ClarifierTest {
         assertThat(r.question).isEqualTo(q)
     }
 
+    @Test fun reminderThatIsCompleteIsRestatedAsACalendarEvent() = runTest {
+        val c = clarifier(clarifyJson(title = "交报告", date = "2026-10-30", start = "14:00", mappedFrom = "提醒"))
+        val r = c.clarify(user("下周五下午2点提醒我交报告")) as ClarifyOutcome.Ready
+        assertThat(r.restatement).startsWith("好，提醒我会做成日历事项，到时会通知你：「交报告」")
+        assertThat(r.restatement).contains("10月30日（周五） 14:00–15:00")
+    }
+
     @Test fun unsupportedTaskRepliesWithoutStarting() = runTest {
         val c = clarifier(clarifyJson(type = "unsupported", reply = "这个我做不了。现在能帮你在日历里加事项。"))
         val r = c.clarify(user("帮我订个外卖")) as ClarifyOutcome.Reply

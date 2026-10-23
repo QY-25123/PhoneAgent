@@ -16,6 +16,8 @@ class LoopConfig(
     val maxSelfCheckFailures: Int = 2,
     /** 同一个动作在同一个界面上出现这么多次（不要求连续）就判定为在打转 */
     val maxRepeats: Int = 3,
+    /** 日历快速通道（见 [CalendarFastPath]） */
+    val calendarFastPath: Boolean = true,
 )
 
 enum class StopKind { REPEATING, MODEL_GAVE_UP, STEP_LIMIT, CALL_LIMIT, REPEATED_FAILURE, NO_CHANGE, MODEL_ERROR, BLOCKED, SELF_CHECK_FAILED }
@@ -78,11 +80,62 @@ class AgentLoop(
         history += if (pre.ok) Prompts.HistoryItem(null, "", "用「插入事项」意图在虚拟屏打开了日历新建页并预填标题和起止时间", "成功")
         else Prompts.HistoryItem(null, "", "尝试用「插入事项」意图打开新建页", "失败（${pre.message}）：改用界面操作，从 open_app calendar 开始")
 
+        var pending: PerceptionResult? = null   // 已经感知过、下一轮直接用的界面
+
+        // 自查：只看界面上实际看到的内容。返回 null 表示通过，否则是问题描述；模型失败抛出 [ModelException]
+        suspend fun selfCheck(screen: PerceptionResult, claim: String): Pair<Boolean, String?> {
+            calls++
+            val vreq = ModelRequest(
+                "verify", Prompts.VERIFY_SYSTEM,
+                listOf(ModelMessage("user", Prompts.verifyUser(taskText, confirmed, claim, screen.text), listOfNotNull(screen.state.screenshotJpeg))),
+                Schemas.VERIFY, 600, "low", Models.verify,
+            )
+            val vresp = try { model.complete(vreq).also { log.modelCall(vreq, it, null) } } catch (e: ModelException) {
+                log.modelCall(vreq, null, e.message); throw e
+            }
+            val v = try { org.json.JSONObject(vresp.json) } catch (e: Exception) { null }
+            if (v != null && v.optBoolean("verified")) return true to v.optString("evidence")
+            return false to (v?.takeIf { !it.isNull("problem") }?.optString("problem") ?: "自查没有通过")
+        }
+
+        // 快速通道：新建页已按要求预填好（本地核对一致）就直接点保存，再自查一次
+        if (cfg.calendarFastPath && pre.ok) {
+            val first = phone.perceive()
+            val idx = CalendarFastPath.saveIndex(task, first.state)
+            if (idx == null) {
+                pending = first
+                history += Prompts.HistoryItem(null, "", "本地核对：新建页上的标题/日期/起止时间没有全部对上", "交给你检查和处理")
+            } else {
+                steps++
+                val tapAction = Action.Tap(idx)
+                host.onStep(StepInfo(steps, "新建页已按要求预填好，标题、日期、起止时间都对得上", "点击「保存」", first))
+                val out = phone.execute(tapAction, first.state)
+                log.step(steps, first, null, out, "快速通道：本地核对通过，直接保存")
+                history += Prompts.HistoryItem(steps, "新建页的标题、日期、起止时间与已确认信息一致（本地核对）", tapAction.describe(), if (out.ok) "成功" else "失败：${out.message}")
+                if (out.blocked) return fail(StopKind.BLOCKED, "这个操作被安全规则拦截了（${out.message}），我不会绕过它")
+                if (out.ok) {
+                    val after = phone.perceive()
+                    val (ok, info) = try { selfCheck(after, "已点击保存") } catch (e: ModelException) { return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败") }
+                    if (ok) {
+                        log.finish("成功：已保存", steps, calls, (System.nanoTime() - t0) / 1_000_000)
+                        return LoopResult.Success("事项已保存", info ?: "", steps, calls)
+                    }
+                    history += Prompts.HistoryItem(null, "", "点击保存后自查", "自查未通过：$info")
+                    sigBeforeAction = StabilityWaiter.signatureOf(first.state.elements)
+                    pending = after
+                } else {
+                    failures++
+                    pending = phone.perceive()
+                }
+            }
+        }
+
         while (true) {
             if (steps >= cfg.maxSteps) return fail(StopKind.STEP_LIMIT, "已经执行了 ${cfg.maxSteps} 步还没完成，我先停下了")
             if (calls >= cfg.maxModelCalls) return fail(StopKind.CALL_LIMIT, "这次任务的模型调用已经用到上限（${cfg.maxModelCalls} 次），我先停下了")
 
-            val screen = phone.perceive()
+            val screen = pending ?: phone.perceive()
+            pending = null
             val sig = signature(screen)
             if (sigBeforeAction != null) {
                 unchanged = if (sig == sigBeforeAction) unchanged + 1 else 0
@@ -102,6 +155,7 @@ class AgentLoop(
                 schemaJson = Schemas.STEP,
                 maxTokens = 1200,
                 effort = "low",
+                model = Models.step,
             )
             calls++
             val resp = try {
@@ -124,26 +178,14 @@ class AgentLoop(
                 is Action.Done -> {
                     log.step(steps, screen, decision, null)
                     if (!a.success) return fail(StopKind.MODEL_GAVE_UP, a.result.ifBlank { "没能完成这件事" })
-                    // 自查：只看界面上实际看到的内容
-                    calls++
-                    val vreq = ModelRequest(
-                        "verify", Prompts.VERIFY_SYSTEM,
-                        listOf(ModelMessage("user", Prompts.verifyUser(taskText, confirmed, a.result, screen.text), listOfNotNull(screen.state.screenshotJpeg))),
-                        Schemas.VERIFY, 600, "low",
-                    )
-                    val vresp = try { model.complete(vreq).also { log.modelCall(vreq, it, null) } } catch (e: ModelException) {
-                        log.modelCall(vreq, null, e.message)
-                        return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败")
-                    }
-                    val v = try { org.json.JSONObject(vresp.json) } catch (e: Exception) { null }
-                    if (v != null && v.optBoolean("verified")) {
+                    val (ok, info) = try { selfCheck(screen, a.result) } catch (e: ModelException) { return fail(StopKind.MODEL_ERROR, e.message ?: "调用模型失败") }
+                    if (ok) {
                         log.finish("成功：${a.result}", steps, calls, (System.nanoTime() - t0) / 1_000_000)
-                        return LoopResult.Success(a.result, v.optString("evidence"), steps, calls)
+                        return LoopResult.Success(a.result, info ?: "", steps, calls)
                     }
                     selfCheckFailures++
-                    val problem = v?.takeIf { !it.isNull("problem") }?.optString("problem") ?: "自查没有通过"
-                    history += Prompts.HistoryItem(null, decision.understanding, "声称已完成：${a.result}", "自查未通过：$problem")
-                    if (selfCheckFailures >= cfg.maxSelfCheckFailures) return fail(StopKind.SELF_CHECK_FAILED, "没能确认事项已经创建：$problem")
+                    history += Prompts.HistoryItem(null, decision.understanding, "声称已完成：${a.result}", "自查未通过：$info")
+                    if (selfCheckFailures >= cfg.maxSelfCheckFailures) return fail(StopKind.SELF_CHECK_FAILED, "没能确认事项已经创建：$info")
                 }
 
                 is Action.AskUser -> {

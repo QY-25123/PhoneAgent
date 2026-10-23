@@ -38,7 +38,7 @@ class ClaudeModelClient(
             val b = JsonOutputFormat.Schema.builder()
             for (k in schema.keys()) b.putAdditionalProperty(k, JsonValue.from(toJava(schema.get(k))))
             val params = MessageCreateParams.builder()
-                .model(model)
+                .model(req.model ?: model)
                 .maxTokens(req.maxTokens)
                 .system(req.system)
                 .outputConfig(
@@ -78,9 +78,10 @@ class ClaudeModelClient(
             val u = resp.usage()
             ModelResponse(
                 json = text,
-                usage = ModelUsage(u.inputTokens(), u.outputTokens(), u.cacheReadInputTokens().orElse(0), u.cacheCreationInputTokens().orElse(0)),
+                usage = ModelUsage.of(req.model ?: model, u.inputTokens(), u.outputTokens(), u.cacheReadInputTokens().orElse(0), u.cacheCreationInputTokens().orElse(0)),
                 latencyMs = (System.nanoTime() - t0) / 1_000_000,
                 stopReason = stop,
+                model = req.model ?: model,
             )
         } catch (e: ModelException) {
             throw e
@@ -105,6 +106,6 @@ class ClaudeModelClient(
     }
 
     companion object {
-        const val MODEL = "claude-sonnet-5-5"
+        const val MODEL = Models.SONNET
     }
 }

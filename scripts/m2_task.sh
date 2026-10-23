@@ -1,4 +1,5 @@
 #!/bin/bash
+export LC_ALL=en_US.UTF-8
 # 真实跑一条任务：scripts/m2_task.sh "任务文字" ["对追问的回答1" "回答2" ...]
 # 通过 debug 广播 say 提交（和对话页是同一个任务入口），轮询 logcat 里的 TASK 事件直到成功/失败/停止/只回复，
 # 遇到追问就按顺序发送给定的回答。结束后把 runs/<时间>/ 拉到 $OUT/m2_runs/ 并打印摘要。

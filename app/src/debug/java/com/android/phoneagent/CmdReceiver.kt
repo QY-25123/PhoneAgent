@@ -73,6 +73,13 @@ class CmdReceiver : BroadcastReceiver() {
             }
             // 真实任务入口（和对话页同一个进程级单例）：say 发一句话（新任务或对追问的回答），taskstop 停止
             "say" -> android.util.Log.i("PA", "SAY 新任务=" + com.android.phoneagent.task.TaskBackends.get(context).submit(intent.getStringExtra("text") ?: ""))
+            // 临时切换各环节的模型做对比：--es clarify X --es step Y --es verify Z
+            "model" -> {
+                intent.getStringExtra("clarify")?.let { com.android.phoneagent.agent.Models.clarify = it }
+                intent.getStringExtra("step")?.let { com.android.phoneagent.agent.Models.step = it }
+                intent.getStringExtra("verify")?.let { com.android.phoneagent.agent.Models.verify = it }
+                android.util.Log.i("PA", "MODELS clarify=${com.android.phoneagent.agent.Models.clarify} step=${com.android.phoneagent.agent.Models.step} verify=${com.android.phoneagent.agent.Models.verify}")
+            }
             "taskstop" -> com.android.phoneagent.task.TaskBackends.get(context).stop()
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())

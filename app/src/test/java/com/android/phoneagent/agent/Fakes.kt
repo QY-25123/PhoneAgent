@@ -89,3 +89,19 @@ class FakeHost(private val answers: List<String> = emptyList()) : LoopHost {
 }
 
 val TASK = CalendarTask("[PA测试] 评审会", java.time.LocalDate.of(2026, 10, 27), java.time.LocalTime.of(15, 0), 60, listOf("时长按 1 小时算"))
+
+/** 合成一个已预填好的日历新建页：标题框 + 保存 + 日期/开始/结束时间。 */
+fun editorScreen(title: String = TASK.title, start: String = "3:00 PM", end: String = "4:00 PM", date: String = "Tue, Oct 27, 2026"): PerceptionResult {
+    fun el(i: Int, type: String, text: String?, desc: String?, actions: Set<ElementAction>) =
+        UiElement(i, "e$i".padEnd(4, 'x'), type, text, desc, null, null, null, "android.widget.Button", Bounds(0, i * 100, 500, i * 100 + 80), actions, false, null, true)
+    val els = listOf(
+        el(1, "Button", "Cancel", null, setOf(ElementAction.CLICK)),
+        el(2, "Button", "Save", null, setOf(ElementAction.CLICK)),
+        el(3, "EditText", title, null, setOf(ElementAction.EDIT, ElementAction.CLICK)),
+        el(4, "Button", date, "Start date: $date", setOf(ElementAction.CLICK)),
+        el(5, "Button", start, "Start time: $start", setOf(ElementAction.CLICK)),
+        el(6, "Button", end, "End time: $end", setOf(ElementAction.CLICK)),
+    )
+    val st = ScreenState(2, "com.google.android.calendar", "Calendar", 1080, 2400, 0, els, screenshotJpeg = byteArrayOf(1))
+    return PerceptionResult(st, "App: calendar 新建页", PerceptionTimings(0, 1, 1, 1, 1, 1))
+}

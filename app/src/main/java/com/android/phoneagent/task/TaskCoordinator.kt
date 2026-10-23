@@ -14,6 +14,8 @@ import com.android.phoneagent.agent.PhoneController
 import com.android.phoneagent.agent.RunLog
 import com.android.phoneagent.agent.StepInfo
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -108,6 +110,10 @@ class TaskCoordinator(
 
     private suspend fun runSession(first: String) {
         val log = env.newRunLog()
+        // 提速：一看就是日历类的话，澄清的同时就在后台把虚拟屏准备好（创建虚拟屏要几秒），澄清完直接开始。
+        // 结果不是开始任务（只回复/出错）时在 finally 里释放
+        var prefetch: Deferred<Result<PhoneController>>? =
+            if (CALENDAR_HINT.containsMatchIn(first)) scope.async { runCatching { env.prepare() } } else null
         try {
             val clarifier = Clarifier(model, clock, log = log)
             val dialog = arrayListOf(DialogTurn(true, first))
@@ -122,21 +128,27 @@ class TaskCoordinator(
                         emit(TaskEvent.Ask(o.question, o.options))
                         dialog += DialogTurn(true, awaitUser())
                     }
-                    is ClarifyOutcome.Ready -> { emit(TaskEvent.AgentSaid(o.restatement)); execute(o.task, log); return }
+                    is ClarifyOutcome.Ready -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        execute(o.task, log, p)
+                        return
+                    }
                 }
             }
         } catch (e: CancellationException) {
             throw e   // stop() 负责收尾
         } finally {
+            prefetch?.let { p -> withContext(NonCancellable) { runCatching { p.await() }; env.release() } }
             if (session?.isCancelled != true) _busy.value = false
         }
     }
 
-    private suspend fun execute(task: CalendarTask, log: RunLog) {
+    private suspend fun execute(task: CalendarTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("日历 · ${task.title}", cfg.maxSteps))
         var lastStep = 0
         try {
-            val phone = try { env.prepare() } catch (e: IllegalStateException) {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
                 emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
             }
             val host = object : LoopHost {
@@ -168,6 +180,7 @@ class TaskCoordinator(
 
     companion object {
         const val MAX_CLARIFY_ROUNDS = 6
+        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
         private const val EVIDENCE_W = 540
     }

@@ -25,11 +25,12 @@ data class CalendarTask(
     fun endMillis(zone: ZoneId) = date.atTime(start).plusMinutes(durationMinutes.toLong()).atZone(zone).toInstant().toEpochMilli()
 
     /** 一句话复述：要做什么、用了哪些默认值（PRD FR-CLR-5）。 */
-    fun restatement(): String {
+    fun restatement(mappedFromReminder: Boolean = false): String {
         val d = "${date.monthValue}月${date.dayOfMonth}日（${weekdayZh(date.dayOfWeek)}）"
         val t = "${fmt(start)}–${fmt(end)}"
         val defaults = if (assumed.isEmpty()) "" else "，" + assumed.joinToString("，")
-        return "好，我在日历里加「$title」：$d $t$defaults。现在去办。"
+        val lead = if (mappedFromReminder) "好，提醒我会做成日历事项，到时会通知你：「$title」" else "好，我在日历里加「$title」"
+        return "$lead：$d $t$defaults。现在去办。"
     }
 
     /** 给执行循环的「已确认信息」。 */
@@ -79,6 +80,7 @@ class Clarifier(
             schemaJson = Schemas.CLARIFY,
             maxTokens = 1000,
             effort = "low",
+            model = Models.clarify,
         )
         val resp = try {
             model.complete(req).also { log.modelCall(req, it, null) }
@@ -126,7 +128,7 @@ class Clarifier(
         val dur = if (o.isNull("duration_minutes")) null else o.optInt("duration_minutes").takeIf { it in 5..720 }
         val assumed = if (dur == null) listOf("时长按 1 小时算") else emptyList()
         val task = CalendarTask(title!!, date!!, start!!, dur ?: DEFAULT_DURATION_MIN, assumed)
-        return ClarifyOutcome.Ready(task, task.restatement())
+        return ClarifyOutcome.Ready(task, task.restatement(mappedFrom == "提醒"))
     }
 
     private fun parseTime(s: String): LocalTime? = runCatching { LocalTime.parse(s.trim().let { if (Regex("\\d:\\d\\d").matches(it)) "0$it" else it }) }.getOrNull()
