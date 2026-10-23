@@ -2,6 +2,7 @@ package com.android.phoneagent
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -96,7 +97,23 @@ object Agent {
         }
     }
 
-    fun startDisplay() = call("创建虚拟屏") { p ->
+    fun startDisplay() {
+        // 先拉起前台服务保活（必须在 App 可见时调用）
+        appContext.startForegroundService(Intent(appContext, AgentService::class.java))
+        createDisplay()
+    }
+
+    /** 释放 VirtualDisplay、ImageReader、UiAutomation，并停掉前台服务。 */
+    fun stop() = call("停止") { p ->
+        p.release()
+        stopReader()
+        preview = null
+        displayId = -1
+        appContext.stopService(Intent(appContext, AgentService::class.java))
+        report("已停止并释放")
+    }
+
+    private fun createDisplay() = call("创建虚拟屏") { p ->
         stopReader()
         val thread = HandlerThread("preview").also { it.start() }
         val r = ImageReader.newInstance(WIDTH, HEIGHT, PixelFormat.RGBA_8888, 2)

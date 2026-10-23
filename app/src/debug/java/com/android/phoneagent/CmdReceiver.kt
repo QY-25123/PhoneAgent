@@ -17,6 +17,7 @@ class CmdReceiver : BroadcastReceiver() {
             "back" -> Agent.back()
             "text" -> Agent.setText(intent.getStringExtra("t") ?: "你好，世界")
             "dump" -> Agent.dumpTree()
+            "stop" -> Agent.stop()
         }
     }
 }

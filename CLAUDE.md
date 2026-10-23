@@ -25,3 +25,9 @@ Kotlin + Jetpack Compose + Shizuku（api / provider）。参考 scrcpy server �
 - 每个阶段结束前说明如何验证；遇到系统接口行为不确定时先做最小实验，不要猜。
 - 保持简单：原型阶段不做架构抽象、不引入多余依赖。
 - 提交信息简洁，不擅自 push。
+
+## 调试与自测
+- debug 构建带 `CmdReceiver`（`src/debug`，要求发送方持有 `DUMP` 权限，仅 adb shell 可发）：
+  `adb shell am broadcast -a com.android.phoneagent.CMD -n com.android.phoneagent/.CmdReceiver --es cmd <connect|display|launch|tap|swipe|back|text|dump|stop>`
+- 构建需要 Android Studio 自带 JBR：`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew installDebug`
+- 特权代码在 `priv/`（UserService，shell uid）；`UiAutomationHelper` 是可复用的界面树/输入模块。

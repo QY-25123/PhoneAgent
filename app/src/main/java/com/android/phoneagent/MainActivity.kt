@@ -1,5 +1,7 @@
 package com.android.phoneagent
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -29,6 +31,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Agent.init(this)
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+        }
         setContent {
             PhoneAgentTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -58,6 +63,7 @@ class MainActivity : ComponentActivity() {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { Agent.setText(text) }) { Text("写入文字") }
                             Button(onClick = { Agent.dumpTree() }) { Text("dump 界面树") }
+                            Button(onClick = { Agent.stop() }) { Text("停止") }
                         }
                         Agent.preview?.let { Image(it, "preview", Modifier.height(480.dp)) }
                     }
