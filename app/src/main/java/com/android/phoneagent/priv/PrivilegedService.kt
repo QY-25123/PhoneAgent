@@ -36,6 +36,19 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun back(displayId: Int) = input.key(displayId, android.view.KeyEvent.KEYCODE_BACK)
     override fun setText(displayId: Int, text: String): Boolean = ui.setTextOnFocused(displayId, text)
     override fun dumpTree(displayId: Int): String = ui.dump(displayId)
+    override fun setImePolicy(displayId: Int, policy: Int): Int {
+        val wm = Class.forName("android.view.IWindowManager\$Stub").getMethod("asInterface", android.os.IBinder::class.java)
+            .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "window"))
+        val cls = wm.javaClass
+        val old = cls.getMethod("getDisplayImePolicy", Int::class.java).invoke(wm, displayId) as Int
+        if (policy >= 0) cls.getMethod("setDisplayImePolicy", Int::class.java, Int::class.java).invoke(wm, displayId, policy)
+        return old
+    }
+
+    override fun clickAt(displayId: Int, x: Float, y: Float) = ui.clickAt(displayId, x.toInt(), y.toInt())
+    override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
+    override fun globalBack() = ui.globalBack()
+
     override fun release() {
         ui.close()
         display.release()

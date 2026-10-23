@@ -138,7 +138,13 @@ object Agent {
 
     fun setText(text: String) = call("写入文字") { report("写入文字 ${if (it.setText(displayId, text)) "成功" else "失败(无聚焦输入框)"}") }
 
-    fun dumpTree() = call("dump 界面树") { Log.i(TAG, "tree:\n" + it.dumpTree(displayId)); report("界面树已输出到 logcat") }
+    fun dumpTree(display: Int = displayId) = call("dump 界面树") { Log.i(TAG, "tree:\n" + it.dumpTree(display)); report("界面树已输出到 logcat") }
+
+    // 以下是输入法隔离实验用的入口
+    fun setImePolicy(policy: Int) = call("IME 策略") { report("IME 策略 display=$displayId ${it.setImePolicy(displayId, policy)} -> $policy") }
+    fun clickNode(x: Float, y: Float) = call("语义点击") { report("语义点击 ($x,$y) ${if (it.clickAt(displayId, x, y)) "成功" else "无可点击节点"}") }
+    fun scrollNode(forward: Boolean) = call("语义滚动") { report("语义滚动 fwd=$forward ${if (it.scroll(displayId, forward)) "成功" else "失败"}") }
+    fun globalBack() = call("GLOBAL_BACK") { report("GLOBAL_ACTION_BACK ${if (it.globalBack()) "已执行" else "失败"}") }
 
     private fun onFrame(r: ImageReader) {
         val img = r.acquireLatestImage() ?: return

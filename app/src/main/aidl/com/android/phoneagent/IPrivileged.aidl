@@ -17,4 +17,13 @@ interface IPrivileged {
     String dumpTree(int displayId) = 8;
     // 释放 VirtualDisplay 和 UiAutomation
     void release() = 9;
+
+    // 输入法隔离实验：设置虚拟屏的 IME 策略（0=LOCAL 1=FALLBACK_DISPLAY 2=HIDE），返回旧值
+    int setImePolicy(int displayId, int policy) = 10;
+    // 无障碍语义操作：对坐标处最深的可点击节点执行 ACTION_CLICK
+    boolean clickAt(int displayId, float x, float y) = 11;
+    // 对虚拟屏上第一个可滚动节点执行 ACTION_SCROLL_FORWARD/BACKWARD
+    boolean scroll(int displayId, boolean forward) = 12;
+    // UiAutomation.performGlobalAction(GLOBAL_ACTION_BACK)，无 displayId 参数
+    boolean globalBack() = 13;
 }

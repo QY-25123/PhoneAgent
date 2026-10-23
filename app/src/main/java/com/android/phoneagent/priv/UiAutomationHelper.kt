@@ -58,11 +58,12 @@ class UiAutomationHelper {
         return windows.mapNotNull { it.root }
     }
 
-    /** 向指定屏幕上当前聚焦的输入框写文字（ACTION_SET_TEXT，不经过输入法）。 */
+    /** 向指定屏幕上的输入框写文字（ACTION_SET_TEXT，不经过输入法）：优先聚焦的，否则第一个可编辑节点。 */
     fun setTextOnFocused(displayId: Int, text: String): Boolean {
         for (root in windowRoots(displayId)) {
             val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                 ?: findFirst(root) { it.isEditable && it.isFocused }
+                ?: findFirst(root) { it.isEditable }
                 ?: continue
             val args = Bundle().apply {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
@@ -72,10 +73,43 @@ class UiAutomationHelper {
         return false
     }
 
+    /** 对坐标处最深的可点击节点执行 ACTION_CLICK（语义点击，不产生触摸事件）。 */
+    fun clickAt(displayId: Int, x: Int, y: Int): Boolean {
+        for (root in windowRoots(displayId).asReversed()) {
+            val node = deepestAt(root, x, y) { it.isClickable } ?: continue
+            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        }
+        return false
+    }
+
+    fun scroll(displayId: Int, forward: Boolean): Boolean {
+        val action = if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        for (root in windowRoots(displayId)) {
+            val node = findFirst(root) { it.isScrollable } ?: continue
+            return node.performAction(action)
+        }
+        return false
+    }
+
+    fun globalBack(): Boolean = connect().performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+
+    private fun deepestAt(n: AccessibilityNodeInfo, x: Int, y: Int, pred: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        val r = android.graphics.Rect().also { n.getBoundsInScreen(it) }
+        if (!r.contains(x, y) || !n.isVisibleToUser) return null
+        for (i in n.childCount - 1 downTo 0) {
+            n.getChild(i)?.let { c -> deepestAt(c, x, y, pred)?.let { return it } }
+        }
+        return if (pred(n)) n else null
+    }
+
     /** 界面树的文本形式：每行一个节点。 */
     fun dump(displayId: Int): String {
         val sb = StringBuilder()
-        for (root in windowRoots(displayId)) dumpNode(root, 0, sb)
+        for (w in connect().windowsOnAllDisplays[displayId].orEmpty()) {
+            sb.append("WINDOW display=").append(w.displayId).append(" id=").append(w.id).append(" type=").append(w.type)
+                .append(" title=").append(w.title).append(" focused=").append(w.isFocused).append(" active=").append(w.isActive).append('\n')
+            w.root?.let { dumpNode(it, 1, sb) }
+        }
         return sb.toString()
     }
 
