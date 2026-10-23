@@ -10,6 +10,13 @@ class CmdReceiver : BroadcastReceiver() {
         Agent.init(context)
         when (intent.getStringExtra("cmd")) {
             "connect" -> Agent.connect()
+            "display" -> Agent.startDisplay()
+            "launch" -> Agent.launch()
+            "tap" -> Agent.tap(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 1200).toFloat())
+            "swipe" -> Agent.swipe(540f, 1800f, 540f, 600f)
+            "back" -> Agent.back()
+            "text" -> Agent.setText(intent.getStringExtra("t") ?: "你好，世界")
+            "dump" -> Agent.dumpTree()
         }
     }
 }
