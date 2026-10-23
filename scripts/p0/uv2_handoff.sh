@@ -52,6 +52,20 @@ grep -q "UV2 草稿 draft-123" "$OUT/tree.txt"; check "日历：移动后主屏�
 pat clicktext t "Cancel" --ez touch true --ei display 0; sleep 2; pat clicktext t "Discard" --ez touch true --ei display 0; sleep 2
 adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1
 
+echo "== Gmail：新建邮件草稿（已填收件人芯片、主题，未发送）"
+GM=com.google.android.gm
+boot; pa launch --es c $GM; sleep 8
+for t in "Don" "GOT IT" "TAKE ME TO GMAIL" "Got it"; do pat clicktext t "$t" --ez touch true; sleep 1.5; done
+clickt "Compose" true 4 >/dev/null; sleep 1
+typeat 540 390 "qijie_jerry@163.com" >/dev/null; clickt "Add recipient" true 3 >/dev/null
+typeat 540 530 "UV2 草稿 gmail-draft-456" >/dev/null
+move_and_check "Gmail" $GM "UV2 草稿 gmail-draft-456"
+grep -q "UV2 草稿 gmail-draft-456" "$OUT/tree.txt"; check "Gmail：移动后主屏上草稿主题仍在" $?
+grep -q "Recipients: qijie_jerry@163.com" "$OUT/tree.txt"; check "Gmail：移动后收件人芯片仍在" $?
+# 清理：在主屏上丢弃这份草稿（本验证创建的草稿；撰写界面 More options → Discard，没有确认框）
+pat clicktext t "More options" --ez touch true --ei display 0; sleep 2; pat clicktext t "Discard" --ez touch true --ei display 0; sleep 3
+adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1
+
 pa stop; sleep 1
 echo "  停止后 ATM 显示屏：$(adb shell dumpsys activity activities | grep 'Display: mDisplayId=' | tr -d '\n ' )"
 echo; [ $FAILS = 0 ] && echo "UV-2 结果: PASS" || echo "UV-2 结果: FAIL($FAILS)"; exit $FAILS

@@ -26,16 +26,16 @@ run_app() { # $1=包名 $2=启动器文案 $3=标签
   echo; echo "######## $NAME（$COMP）"
   echo "== ① 开始前：主屏前台应用检测"
   boot; adb shell am start --display 0 -n "$COMP" >/dev/null; sleep 4
-  [ "$(fg_pkg)" = "$APP" ]; check "$NAME：用户在主屏打开后识别为 $APP（实际 $(fg_pkg)）" $?
+  [ "$(fg_pkg)" = "$APP" ]; check "${NAME}：用户在主屏打开后识别为 $APP（实际 $(fg_pkg)）" $?
   adb shell input keyevent KEYCODE_HOME; sleep 2
-  [ "$(fg_pkg)" != "$APP" ]; check "$NAME：回桌面后不再识别" $?
+  [ "$(fg_pkg)" != "$APP" ]; check "${NAME}：回桌面后不再识别" $?
   echo "== ② 运行中被抢走：启动器图标路径（真实用户路径）"
   boot; pa launch --es c "$APP"; sleep 8; dismiss_popups; VD=$(vdisplay); T0=$(vtask "$VD")
-  [ -n "$T0" ]; check "$NAME：启动后虚拟屏上有任务（${T0}）" $?
+  [ -n "$T0" ]; check "${NAME}：启动后虚拟屏上有任务（${T0}）" $?
   launcher_open "$APP" "$LABEL"
   T1=$(vtask "$VD"); echo "  启动器点图标后：虚拟屏任务='${T1}' 主屏前台=$(fg_pkg)"
-  [ -z "$T1" ] || [ "$T1" != "$T0" ]; check "$NAME：虚拟屏上的任务消失（可检测到被抢走）" $?
-  [ "$(fg_pkg)" = "$APP" ]; check "$NAME：该 App 出现在主屏" $?
+  [ -z "$T1" ] || [ "$T1" != "$T0" ]; check "${NAME}：虚拟屏上的任务消失（可检测到被抢走）" $?
+  [ "$(fg_pkg)" = "$APP" ]; check "${NAME}：该 App 出现在主屏" $?
   echo "== ③ 吸收：不带 display 的组件启动"
   boot; pa launch --es c "$APP"; sleep 8; dismiss_popups; VD=$(vdisplay); T0=$(vtask "$VD")
   adb logcat -b events -c; adb shell am start -n "$COMP" >/dev/null; sleep 3; T1=$(vtask "$VD")
@@ -46,7 +46,7 @@ run_app() { # $1=包名 $2=启动器文案 $3=标签
   echo "== ④ 无误报：虚拟屏内部导航（任务 id 不变）"
   boot; pa launch --es c "$APP"; sleep 8; dismiss_popups; VD=$(vdisplay); T0=$(vtask "$VD")
   pa back; sleep 2; pa swipe; sleep 2; T1=$(vtask "$VD")
-  [ "$T0" = "$T1" ] && [ "$(fg_pkg)" = "$PKG" ]; check "$NAME：内部操作后任务不变（${T0} → ${T1}），主屏仍是 PhoneAgent" $?
+  [ "$T0" = "$T1" ] && [ "$(fg_pkg)" = "$PKG" ]; check "${NAME}：内部操作后任务不变（${T0} → ${T1}），主屏仍是 PhoneAgent" $?
 }
 
 run_app com.google.android.gm "Gmail" "Gmail"

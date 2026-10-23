@@ -51,15 +51,20 @@ object SafetyGuard {
 
     private fun label(n: AccessibilityNodeInfo) = "${n.text ?: ""} ${n.contentDescription ?: ""}".trim()
 
-    fun isHard(n: AccessibilityNodeInfo) = HARD.containsMatchIn(label(n))
-    fun isLock(n: AccessibilityNodeInfo) = LOCK.containsMatchIn(label(n))
+    // 网页内容（WebView）里控件的可见文案可能是「Submit」，DOM id 才有语义（实测 Amazon：id=buy-now-button 的文案是 Submit），所以也匹配资源 id
+    private val HARD_ID = Regex("buy-?now|place-?(your-?)?order|submit-?order|one-?click|1-?click", RegexOption.IGNORE_CASE)
+    private val LOCK_ID = Regex("place-?(your-?)?order|submit-?order", RegexOption.IGNORE_CASE)
+
+    fun isHard(n: AccessibilityNodeInfo) = HARD.containsMatchIn(label(n)) || HARD_ID.containsMatchIn(n.viewIdResourceName ?: "")
+    fun isLock(n: AccessibilityNodeInfo) = LOCK.containsMatchIn(label(n)) || LOCK_ID.containsMatchIn(n.viewIdResourceName ?: "")
 
     /** 命中硬拦截的控件：区域为控件自身与最近的可点击祖先的并集。 */
     fun hardControls(roots: List<AccessibilityNodeInfo>): List<Hard> {
         val out = ArrayList<Hard>()
         fun walk(n: AccessibilityNodeInfo) {
             val gm = isGmailSend(n)
-            if (gm || isHard(n)) {
+            // 只看屏幕上可见的控件：网页里被隐藏的 buy-now 节点高度为 0，不应该拦住它附近的正常点击
+            if (n.isVisibleToUser && (gm || isHard(n))) {
                 val r = Rect().also { n.getBoundsInScreen(it) }
                 var p: AccessibilityNodeInfo? = n
                 var i = 0
@@ -91,7 +96,7 @@ object SafetyGuard {
         var found: String? = null
         fun walk(n: AccessibilityNodeInfo) {
             if (found != null) return
-            if (isLock(n)) { found = label(n); return }
+            if (n.isVisibleToUser && isLock(n)) { found = label(n); return }
             for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it) }
         }
         roots.forEach { walk(it) }

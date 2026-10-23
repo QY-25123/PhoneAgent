@@ -206,6 +206,8 @@ object Agent {
 
     fun setTextAt(x: Float, y: Float, text: String) = call("写入文字(按坐标)", guarded = true) { report("写入文字(按坐标) ($x,$y) ${if (it.setTextAt(displayId, x, y, text)) "成功" else "失败(该处没有可编辑节点)"}") }
 
+    fun pressKey(code: Int) = call("按键 $code", guarded = true) { it.pressKey(displayId, code); report("按键 $code") }
+
     fun listTasks(display: Int) = call("任务列表", executor = readIo) { Log.i(TAG, "TASKS display=$display\n" + it.listTasks(display)); report("任务列表已输出") }
     fun moveTask(taskId: Int, display: Int) = call("移动任务", executor = readIo) { it.moveTaskToDisplay(taskId, display); report("已移动任务 $taskId → display $display") }
 

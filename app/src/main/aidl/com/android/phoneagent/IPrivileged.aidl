@@ -37,6 +37,9 @@ interface IPrivileged {
     // 向坐标处的可编辑节点写文字（按节点定位，不依赖「当前聚焦」）
     boolean setTextAt(int displayId, float x, float y, String text) = 20;
 
+    // 向指定屏幕发送一个按键（带 displayId），如回车提交搜索
+    void pressKey(int displayId, int keyCode) = 21;
+
     // 测试用：草稿里有该收件人才布防，只对这一封放行一次 Gmail 发送点击（FR-SAFE-12 原型）
     boolean armGmailSend(int displayId, String recipient) = 19;
 

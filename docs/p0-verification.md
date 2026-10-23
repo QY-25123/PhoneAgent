@@ -5,10 +5,10 @@
 
 | 项 | 能力 | 结论 | 状态 |
 |---|---|---|---|
-| P0-1 UV-5 | 三个目标 App（日历、Gmail、Amazon）在虚拟屏运行 | Google 日历通过；Gmail、Amazon 未完成（T2 已从 Telegram 改为 Gmail） | 进行中 |
-| P0-2 UV-6 | Amazon 结算页：安全窗口与界面树 | 未开始（Amazon 未安装） | 阻塞 |
-| P0-3 UV-3 | 同一 App 冲突检测 | **通过**（吸收场景为启发式） | 完成 |
-| P0-4 UV-2 | 任务移到主屏（交接） | 设置、日历通过；Gmail、Amazon 待补测 | 部分完成 |
+| P0-1 UV-5 | 三个目标 App（日历、Gmail、Amazon）在虚拟屏运行 | **通过**（日历、Gmail、Amazon 都能运行并读到所需文字；有几条需要写进 PRD 的限制） | 完成 |
+| P0-2 UV-6 | Amazon 结算页：安全窗口与界面树 | **通过：T3 成立**（提交订单页不是安全窗口，画面和界面树都可读，硬拦截有效）；数量要在购物车页核对 | 完成 |
+| P0-3 UV-3 | 同一 App 冲突检测 | **通过**（设置、Gmail、日历三个 App 结果一致；吸收场景为启发式） | 完成 |
+| P0-4 UV-2 | 任务移到主屏（交接） | 设置、日历通过；Gmail 的移动本身通过，草稿内容保留项因测试脚本时序问题未单独验证 | 完成（有一项未单独验证） |
 | P0-5 UV-4 | 悬浮窗 | **通过**，但有一条重要限制（某些 App 会让所有悬浮窗消失） | 完成 |
 | P0-6 UV-1 | 全屏观看帧率 | **通过**（10 fps 目标和 5 fps 底线在模拟器上都达到；CPU 路径有成本） | 完成 |
 
@@ -37,7 +37,15 @@
 - 一个实现细节：任务被抢走后，应立即停止对虚拟屏的操作，否则 agent 的触摸会落在已经不属于它的 display 上。
 
 ### 注意
-- `Settings` 是 singleTask 风格的应用，启动器启动时的行为（新建任务）对别的 App 可能不同，在 Gmail、Google 日历上需要再确认（补测见下）。
+### 补测：Gmail、Google 日历（T2 改为 Gmail 后）
+脚本：`scripts/p0/uv3_apps.sh`，对两个 App 各跑四个场景，**结果与设置完全一致**：
+| 场景 | Gmail | Google 日历 |
+|---|---|---|
+| ① 开始前，用户在主屏打开该 App → 识别为主屏前台；回桌面后不再识别 | ✅ | ✅ |
+| ② 运行中，用户点启动器图标 → 虚拟屏任务消失、App 出现在主屏（可检测） | ✅ | ✅ |
+| ③ 不带 display 的启动 → 被吸收，任务列表不变；事件日志里有孤立的 `wm_task_moved`（`wm_create_activity`×0） | ✅ 同设置 | ✅ 同设置 |
+| ④ 虚拟屏内部操作（返回、滑动）→ 任务 id 不变，无误报 | ✅ | ✅ |
+结论：冲突检测方案对三个 App 都适用，不依赖具体 App 的启动模式。T2（Gmail）的「开始前等待」和「运行中被抢走→中断」都可实现。
 
 ---
 
@@ -167,3 +175,36 @@ T2 已由 Telegram 改为 Gmail（PRD v0.4），Telegram 相关验证全部取�
 2. 收件人需要**两步**：写入文字 + 点击联系人建议行，才会生成芯片；验证要读 `Recipients:` 描述。
 3. 「已发送」列表里收件人只有名字，完整地址需要**打开邮件并展开**；完成验证因此至少多 3 步（打开邮件、展开、读取），要计入步数预算。
 4. 每次启动 Gmail 都会弹系统通知权限对话框。
+
+### UV-2 补充：Gmail
+`scripts/p0/uv2_handoff.sh` 的 Gmail 段：移动本身的检查全部通过（任务出现在主屏最上面并可见、虚拟屏变空、Activity 是同一个实例、事件日志里没有 `wm_destroy_activity`）。**「草稿内容仍在」没有单独验证**：脚本里点「Add recipient」建议行偶尔找不到，草稿没填成（测试时序问题，不是移动的问题）。日历草稿已经证明「移动后输入内容保留」，Gmail 是同一机制，风险低；T2 本身没有交接，这一项对 v1 影响很小。
+
+---
+
+## P0-1 UV-5 续：Amazon
+
+| 检查 | 结果 |
+|---|---|
+| 在虚拟屏上启动并正常渲染 | ✅（登录态正常，首页、搜索、商品页、购物车、结算页都正常） |
+| 界面树可读（含网页内容） | ✅ **但有加载延迟**：页面刚出现时界面树只有外壳（WebView 一个节点，11 行），等几秒后才有网页内容（几百到两千多行）。**读取界面树必须带等待/重试**，不能一次读不到就判定失败 |
+| 搜索 | 点搜索框 → 输入框是 `EditText`（`rs_search_src_text`），`ACTION_SET_TEXT` 写入成功；**没有出现建议列表**，需要回车提交：新增了向虚拟屏发送带 displayId 的按键（回车），搜索结果出现，商品条目在界面树里有「Go to detail page for "商品名…"」 |
+| 商品页 | ✅ 「Add to Cart」可见（底部固定条，`desc="Add to Cart"`）；数量选择在 `mobileQuantityDropDown`；**「Buy Now」在网页里的节点是 `id=buy-now-button`、文案却是「Submit」**——靠文案匹配拦截不到，**必须同时匹配 id** |
+| 购物车页 | ✅ 「Proceed to checkout (1 item)」、小计、商品、**数量有明确描述**（`Quantity is 1`，`Increase quantity by one`）；**测试开始前购物车里已经有 1 件商品**（用户说已清空，但显示 1 件）。没有改动它 |
+| 去结算后的中间页 | 出现「Prime for Young Adults」推广页（Try Prime for Young Adults / **No thanks**）。点「No thanks」继续。**「Try Prime」「Join Prime」是订阅（会扣费），必须也加入硬拦截** |
+
+## P0-2 UV-6 Amazon 结算页：通过，T3 成立
+
+到达最终的「Place your order」页（没有点击任何下单按钮）。
+
+| 检查 | 结果 |
+|---|---|
+| 画面是否黑屏（`FLAG_SECURE`） | **不是**：虚拟屏截图完整可读（总价、地址、支付方式都能看到），证据截图可用 |
+| 界面树 | ✅ 完整可读：`placeYourOrder`（容器）、**`placeOrder` 按钮，文案「Place your order」**、`Items:`/`Shipping & handling:`/`Order total:` 金额、`Delivering to …` 地址、`Paying with Mastercard …`、`changePaymentOptionLink`、`change-delivery-link`。商品名可以在界面树里找到 |
+| 数量 | ⚠ 最终页里**没有直接的数量文字**（只有一个编码过的节点 id 和商品小计），所以**数量要在购物车页核对**（`Quantity is N`），最终页核对商品名和小计 |
+| 硬拦截（页面级锁定） | ✅ 在这一页点无害控件（「Change delivery address」）被拦截：`BLOCKED 页面级锁定：当前页面含「」`（命中的是节点 id `placeOrder`，文案为空，说明 id 匹配生效）。**为了安全没有测试直接点「Place your order」和「Buy Now」**：页面级锁定已经证明会拦住这一页的所有点击 |
+| 悬浮窗 | ✅ Amazon 的结算页在虚拟屏上时，悬浮窗正常显示（没有被隐藏） |
+| 回退 | 返回两次回到购物车，购物车仍是原来的 1 件，**没有下单**（全程未点击 Place your order / Buy Now / Try Prime） |
+
+### 结论
+- **T3 成立**：能到达提交订单页；页面可读（画面+界面树）；硬拦截有效；不是安全窗口，不需要降级。
+- 需要调整的点：①数量改在**购物车页**核对；②最终页核对商品名、小计、「Place your order」按钮可见；③中间会出现 Prime 推广页（点「No thanks」）；④**「Try Prime / Join Prime / Start free trial」等订阅按钮要加入硬拦截**；⑤硬拦截必须匹配**节点 id**（`buy-now-button`、`placeOrder`）；⑥读界面树要等页面加载（重试）；⑦购物车里可能已有别的商品（T3-R7 已覆盖）。

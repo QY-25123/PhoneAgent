@@ -66,6 +66,11 @@ class PrivilegedService : IPrivileged.Stub() {
         return "CLICKED「$label」at ${r.centerX()},${r.centerY()}"
     }
 
+    override fun pressKey(displayId: Int, keyCode: Int) {
+        guardPoint(displayId, null, null)
+        input.key(displayId, keyCode)
+    }
+
     override fun back(displayId: Int) = input.key(displayId, android.view.KeyEvent.KEYCODE_BACK)
     override fun setText(displayId: Int, text: String): Boolean {
         guardPoint(displayId, null, null)

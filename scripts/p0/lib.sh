@@ -33,6 +33,9 @@ shot() { # shot NAME -> $OUT/NAME.png（虚拟屏全分辨率画面）
 clickt() { # clickt 文案 [touch=true] [等待秒]：按文案点击虚拟屏上的控件（硬拦截生效）
   adb logcat -c; pat clicktext t "$1" --ez touch "${2:-true}"; sleep "${3:-2.5}"; plog 1
 }
+typeat() { # typeat X Y 文字：向坐标处的可编辑节点写文字（按节点定位；「当前聚焦」在 Gmail 等界面不可靠）
+  adb shell "am broadcast -a $PKG.CMD -n $PKG/.CmdReceiver --es cmd textat --ei x $1 --ei y $2 --es t '$3'" >/dev/null; sleep 2; plog 1
+}
 typet() { pat text t "$1"; sleep 2; plog 1; }
 FAILS=0
 check() { # check 描述 条件（0=通过）

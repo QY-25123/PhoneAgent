@@ -17,6 +17,7 @@ class CmdReceiver : BroadcastReceiver() {
                 val f = java.io.File(context.getExternalFilesDir(null), "shot.png")
                 android.util.Log.i("PA", "SHOT ${Agent.saveShot(f)} ${f.absolutePath}")
             }
+            "key" -> Agent.pressKey(intent.getIntExtra("code", 66))
             "textat" -> Agent.setTextAt(intent.getIntExtra("x", 0).toFloat(), intent.getIntExtra("y", 0).toFloat(), intent.getStringExtra("t") ?: "")
             "armsend" -> Agent.armGmailSend(intent.getStringExtra("r") ?: "")
             "tasks" -> Agent.listTasks(intent.getIntExtra("display", Agent.displayId))
