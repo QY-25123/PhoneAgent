@@ -85,6 +85,7 @@ class CmdReceiver : BroadcastReceiver() {
             // 点确认卡片上的按钮：--es choice SEND|MODIFY|CANCEL
             "confirm" -> com.android.phoneagent.task.TaskBackends.get(context).confirm(
                 com.android.phoneagent.task.ConfirmChoice.valueOf(intent.getStringExtra("choice") ?: "CANCEL"))
+            "handoff" -> com.android.phoneagent.task.TaskBackends.get(context).handoff()   // 点交接卡片上的「去完成」
             "taskstop" -> com.android.phoneagent.task.TaskBackends.get(context).stop()
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())

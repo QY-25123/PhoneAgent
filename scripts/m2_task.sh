@@ -33,7 +33,7 @@ while [ $(( $(date +%s) - START )) -lt $TIMEOUT ]; do
     fi
     seen=$total
   fi
-  if grep -qE '^TASK (成功|失败|停止)：' $OUT/m2_events.txt; then RESULT=$(grep -E '^TASK (成功|失败|停止)：' $OUT/m2_events.txt | tail -1); break; fi
+  if grep -qE '^TASK (成功|失败|停止|交接)：' $OUT/m2_events.txt; then RESULT=$(grep -E '^TASK (成功|失败|停止|交接)：' $OUT/m2_events.txt | tail -1); break; fi
   # 只回复、不开始任务（不支持/闲聊/还在开发中）：说了话、没有「开始」、也没有未回答的追问
   if grep -q '^TASK 说：' $OUT/m2_events.txt && ! grep -q '^TASK 开始：' $OUT/m2_events.txt && ! grep -q '^TASK 问：' $OUT/m2_events.txt && ! grep -q '复述\|现在去办' $OUT/m2_events.txt; then
     sleep 3; RESULT="（只回复，没有开始任务）"; break

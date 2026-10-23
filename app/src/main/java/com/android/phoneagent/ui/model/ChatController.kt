@@ -82,8 +82,12 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
             }
             is TaskEvent.Confirm -> {
                 items.filter { it is ChatItem.Confirm && it.state == ConfirmState.PENDING }.forEach { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SUPERSEDED) } }
-                add(ChatItem.Confirm(id(), e.to, e.subject, e.body, ConfirmState.PENDING))
-                liveStatus(LiveStatus.WAITING, "等你确认后发送")
+                add(ChatItem.Confirm(id(), e.to, e.subject, e.body, ConfirmState.PENDING, e.kind))
+                liveStatus(LiveStatus.WAITING, if (e.kind == "cart") "等你确认修改购物车" else "等你确认后发送")
+            }
+            is TaskEvent.Handoff -> {
+                liveStatus(LiveStatus.DONE, e.where)
+                add(ChatItem.Handoff(id(), e.where, e.summary, false))
             }
             is TaskEvent.Succeeded -> {
                 items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }
@@ -190,6 +194,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     fun goHandoff(handoffId: Long) {
         replace(handoffId) { (it as ChatItem.Handoff).copy(done = true) }
+        backend?.handoff()
     }
 
     /** 画廊用：显示一个点击位置圆点。 */

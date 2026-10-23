@@ -6,6 +6,10 @@ import com.android.phoneagent.agent.CalendarTask
 import com.android.phoneagent.agent.ClarifyOutcome
 import com.android.phoneagent.agent.Clarifier
 import com.android.phoneagent.agent.ConfirmDecision
+import com.android.phoneagent.agent.ShoppingFlow
+import com.android.phoneagent.agent.ShoppingHost
+import com.android.phoneagent.agent.ShoppingResult
+import com.android.phoneagent.agent.ShoppingTask
 import com.android.phoneagent.agent.DialogTurn
 import com.android.phoneagent.agent.EmailFlow
 import com.android.phoneagent.agent.EmailHost
@@ -41,6 +45,9 @@ interface TaskEnvironment {
     fun newRunLog(): RunLog
     /** 虚拟屏当前画面的小图（宽约 [width] 像素），没有则 null */
     fun thumbnail(width: Int): Bitmap?
+    /** 把虚拟屏上的 Amazon 移到主屏并释放虚拟屏（交接）。 */
+    suspend fun handoffToMain()
+
     /** 任务结束或被停止：关掉虚拟屏上的任务并释放 */
     suspend fun release()
 }
@@ -67,6 +74,7 @@ class TaskCoordinator(
     private var pendingAnswer: CompletableDeferred<String>? = null
     private var pendingConfirm: CompletableDeferred<ConfirmChoice>? = null
     private var earlyInstruction: String? = null   // 确认卡片等待期间用户直接打字：当作修改要求
+    @Volatile private var handoffPending = false   // 已停在提交订单页、虚拟屏保留着等用户点「去完成」
     private val sendAttempted = HashSet<String>()   // 点过发送的邮件（收件人|主题）：重试前必须先查「已发送」
 
     override fun submit(text: String): Boolean {
@@ -98,6 +106,15 @@ class TaskCoordinator(
         }
     }
 
+    override fun handoff() {
+        if (!handoffPending) return
+        scope.launch {
+            handoffPending = false
+            withContext(NonCancellable) { env.handoffToMain() }
+            emit(TaskEvent.AgentSaid("已把 Amazon 移到你的屏幕上，下单和付款由你来完成。"))
+        }
+    }
+
     override fun confirm(choice: ConfirmChoice) {
         synchronized(lock) { pendingConfirm?.complete(choice); pendingConfirm = null }
     }
@@ -110,6 +127,7 @@ class TaskCoordinator(
             is TaskEvent.Started -> "开始：${e.title}"
             is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
             is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject}"
+            is TaskEvent.Handoff -> "交接：${e.where}｜${e.summary}"
             is TaskEvent.Succeeded -> "成功：${e.title} ${e.detail}"
             is TaskEvent.Failed -> "失败：${e.reason}"
             is TaskEvent.Stopped -> "停止：${e.reason}"
@@ -124,6 +142,7 @@ class TaskCoordinator(
     }
 
     private suspend fun runSession(first: String) {
+        if (handoffPending) { handoffPending = false; withContext(NonCancellable) { env.release() } }   // 上一次交接的虚拟屏还留着：先清掉
         val log = env.newRunLog()
         // 提速：一看就是日历类的话，澄清的同时就在后台把虚拟屏准备好（创建虚拟屏要几秒），澄清完直接开始。
         // 结果不是开始任务（只回复/出错）时在 finally 里释放
@@ -147,6 +166,12 @@ class TaskCoordinator(
                         emit(TaskEvent.AgentSaid(o.restatement))
                         val p = prefetch; prefetch = null
                         executeEmail(o.task, log, p)
+                        return
+                    }
+                    is ClarifyOutcome.ReadyShopping -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        executeShopping(o.task, log, p)
                         return
                     }
                     is ClarifyOutcome.Ready -> {
@@ -196,6 +221,42 @@ class TaskCoordinator(
             }
         } finally {
             withContext(NonCancellable) { env.release() }
+        }
+    }
+
+    private suspend fun executeShopping(task: ShoppingTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
+        emit(TaskEvent.Started("Amazon · ${task.product ?: "购物车"}", cfg.maxSteps))
+        var handedOff = false
+        try {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+            }
+            val host = object : ShoppingHost {
+                override fun onStep(info: StepInfo) {
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+                override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
+                override suspend fun confirmCartChanges(lines: List<String>): Boolean {
+                    emit(TaskEvent.Confirm("Amazon 购物车", "确认修改购物车", lines.joinToString("\n") { "· $it" }, kind = "cart"))
+                    val d = CompletableDeferred<ConfirmChoice>()
+                    synchronized(lock) { earlyInstruction = null; pendingConfirm = d }
+                    return d.await() == ConfirmChoice.SEND
+                }
+            }
+            when (val r = ShoppingFlow(model, phone, host, cfg, clock, log).run(task)) {
+                is ShoppingResult.Handoff -> {
+                    handedOff = true; handoffPending = true
+                    emit(TaskEvent.Handoff("已到提交订单页", r.summary + "。我没有点下单，由你来付款。"))
+                }
+                is ShoppingResult.Cancelled -> emit(TaskEvent.Stopped(r.note))
+                is ShoppingResult.Failed -> emit(TaskEvent.Failed(r.reason, r.leftovers))
+            }
+        } finally {
+            if (!handedOff) withContext(NonCancellable) { env.release() }   // 交接成功时虚拟屏保留，等用户点「去完成」
         }
     }
 
@@ -252,7 +313,7 @@ class TaskCoordinator(
 
     companion object {
         const val MAX_CLARIFY_ROUNDS = 6
-        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|发给|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
+        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|发给|购物|亚马逊|amazon|购买|买|结算|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
         private const val EVIDENCE_W = 540
     }

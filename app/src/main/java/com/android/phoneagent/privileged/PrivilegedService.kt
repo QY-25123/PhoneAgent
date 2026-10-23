@@ -34,11 +34,12 @@ class PrivilegedService : IPrivileged.Stub() {
         if (out.contains("Error")) error(out.trim())
     }
 
-    /** 只放行两种意图：日历「插入事项」（-a INSERT + content://com.android.calendar/...）和 Gmail 写邮件（-a SENDTO + mailto: + -p Gmail）；其他一律拒绝。 */
+    /** 只放行三种意图：Amazon 链接（VIEW + https://www.amazon.com/ + -p Amazon）、日历「插入事项」（-a INSERT + content://com.android.calendar/...）和 Gmail 写邮件（-a SENDTO + mailto: + -p Gmail）；其他一律拒绝。 */
     override fun launchIntent(displayId: Int, amArgs: Array<String>) {
         val calendarInsert = amArgs.contains("android.intent.action.INSERT") && amArgs.any { it.startsWith("content://com.android.calendar/") }
         val mailCompose = amArgs.contains("android.intent.action.SENDTO") && amArgs.any { it.startsWith("mailto:") } && amArgs.contains("com.google.android.gm")
-        require(calendarInsert || mailCompose) { "不允许的意图" }
+        val amazonView = amArgs.contains("android.intent.action.VIEW") && amArgs.any { it.startsWith("https://www.amazon.com/") } && amArgs.contains("com.amazon.mShop.android.shopping")
+        require(calendarInsert || mailCompose || amazonView) { "不允许的意图" }
         val cmd = listOf("am", "start", "--display", displayId.toString(), "--activity-clear-task") + amArgs
         val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()

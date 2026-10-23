@@ -8,7 +8,7 @@ object Schemas {
     /** 任务澄清（PRD FR-CLR-1）。 */
     val CLARIFY = """
     {"type":"object","additionalProperties":false,
-     "required":["task_type","title","date","start_time","duration_minutes","recipient","email_content","email_subject","email_body","missing","assumed","question","options","mapped_from","reply"],
+     "required":["task_type","title","date","start_time","duration_minutes","recipient","email_content","email_subject","email_body","product","use_cart","quantity","cart_request","missing","assumed","question","options","mapped_from","reply"],
      "properties":{
        "task_type":{"type":"string","enum":["calendar","email","shopping","unsupported","chitchat"]},
        "title":${nullable("string")},
@@ -19,6 +19,10 @@ object Schemas {
        "email_content":${nullable("string")},
        "email_subject":${nullable("string")},
        "email_body":${nullable("string")},
+       "product":${nullable("string")},
+       "use_cart":${nullable("boolean")},
+       "quantity":${nullable("integer")},
+       "cart_request":${nullable("string")},
        "missing":$STRINGS,
        "assumed":$STRINGS,
        "question":${nullable("string")},
@@ -48,6 +52,21 @@ object Schemas {
            "success":${nullable("boolean")},
            "result":${nullable("string")}
          }}
+     }}""".trimIndent()
+
+    /** 购物车改动计划：用户的要求 + 购物车页面 → 逐项改动清单（给确认卡片用）。 */
+    val CART_PLAN = """
+    {"type":"object","additionalProperties":false,
+     "required":["changes","question"],
+     "properties":{
+       "changes":{"type":"array","items":{"type":"object","additionalProperties":false,
+         "required":["item","action","quantity"],
+         "properties":{
+           "item":{"type":"string"},
+           "action":{"type":"string","enum":["delete","set_quantity"]},
+           "quantity":{"anyOf":[{"type":"integer"},{"type":"null"}]}
+         }}},
+       "question":{"anyOf":[{"type":"string"},{"type":"null"}]}
      }}""".trimIndent()
 
     /** done 之后的自查。 */

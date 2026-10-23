@@ -17,6 +17,9 @@ interface PhoneController {
     /** 用 mailto 意图在虚拟屏打开 Gmail 写邮件页，预填收件人、主题、正文；失败时循环退回界面操作。 */
     suspend fun launchEmailCompose(task: EmailTask): ActionOutcome
 
+    /** 用链接在虚拟屏打开 Amazon（搜索结果页或购物车页），只允许 https://www.amazon.com/ 开头的链接。 */
+    suspend fun launchAmazon(url: String): ActionOutcome
+
     /** 打开允许的 App（日历 / Gmail / Amazon）。 */
     suspend fun openApp(app: String): ActionOutcome
 

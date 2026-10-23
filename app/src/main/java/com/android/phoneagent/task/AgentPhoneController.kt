@@ -48,6 +48,11 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
         ActionOutcome(true, "ok")
     }
 
+    override suspend fun launchAmazon(url: String): ActionOutcome = run("打开 Amazon 链接") {
+        Agent.withPriv("打开 Amazon 链接", guarded = true) { it.launchIntent(displayId, com.android.phoneagent.agent.AmazonIntent.args(url)) }
+        ActionOutcome(true, "ok")
+    }
+
     override suspend fun openApp(app: String): ActionOutcome {
         val pkg = AppCatalog.resolve(app) ?: return ActionOutcome(false, "不允许打开「$app」：只能打开日历、Gmail、Amazon")
         return run("打开 $pkg") { Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }; ActionOutcome(true, "ok") }

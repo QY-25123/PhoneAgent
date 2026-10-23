@@ -69,31 +69,32 @@ private fun statusColor(s: LiveStatus) = when (s) {
 /** 确认卡片（T2 等待确认）：收件人、主题、正文全文；发送 / 修改 / 取消。 */
 @Composable
 fun ConfirmCard(item: ChatItem.Confirm, onSend: () -> Unit, onModify: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
-    StructuredCard(icon = AppIcons.mail, title = "待发送的邮件", modifier = modifier, iconTint = AppTheme.colors.warning) {
+    val cart = item.kind == "cart"
+    StructuredCard(icon = if (cart) AppIcons.cart else AppIcons.mail, title = if (cart) "确认修改购物车" else "待发送的邮件", modifier = modifier, iconTint = AppTheme.colors.warning) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
-            Column {
+            if (!cart) Column {
                 CardSub("收件人"); CardMain(item.to)
             }
-            Column {
+            if (!cart) Column {
                 CardSub("主题"); CardMain(item.subject)
             }
             Column {
-                CardSub("正文")
+                CardSub(if (cart) "将要做的改动" else "正文")
                 Box(Modifier.heightIn(max = AppTheme.sizes.bodyMax).verticalScroll(rememberScrollState())) {
                     Text(item.body, style = AppTheme.type.body, color = AppTheme.colors.text)
                 }
             }
             when (item.state) {
                 ConfirmState.PENDING -> {
-                    CardSub("发送后不能撤回，Gmail 只有几秒的撤销时间。")
+                    CardSub(if (cart) "确认后才会改购物车，清单之外的商品不会动。" else "发送后不能撤回，Gmail 只有几秒的撤销时间。")
                     Row(Modifier.padding(top = AppTheme.space.s2), horizontalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
-                        PillButton("发送", onSend, kind = ButtonKind.Primary, icon = AppIcons.send)
-                        PillButton("修改", onModify, icon = AppIcons.edit)
+                        PillButton(if (cart) "确认" else "发送", onSend, kind = ButtonKind.Primary, icon = if (cart) AppIcons.check else AppIcons.send)
+                        if (!cart) PillButton("修改", onModify, icon = AppIcons.edit)
                         PillButton("取消", onCancel, kind = ButtonKind.Danger)
                     }
                 }
-                ConfirmState.SENDING -> StateLine("已确认，正在发送…", AppTheme.colors.accent)
-                ConfirmState.SENT -> StateLine("已发送", AppTheme.colors.success)
+                ConfirmState.SENDING -> StateLine(if (cart) "已确认，正在修改购物车…" else "已确认，正在发送…", AppTheme.colors.accent)
+                ConfirmState.SENT -> StateLine(if (cart) "已修改" else "已发送", AppTheme.colors.success)
                 ConfirmState.CANCELLED -> StateLine("已取消，草稿已丢弃", AppTheme.colors.textSecondary)
                 ConfirmState.SUPERSEDED -> StateLine("已被新版本取代", AppTheme.colors.textSecondary)
             }

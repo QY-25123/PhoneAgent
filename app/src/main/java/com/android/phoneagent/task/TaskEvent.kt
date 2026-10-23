@@ -19,7 +19,10 @@ sealed interface TaskEvent {
     data class Progress(val step: Int?, val maxSteps: Int, val saw: String, val did: String, val thumb: Bitmap?) : TaskEvent
 
     /** 邮件确认卡片：收件人、主题、正文**都是从 Gmail 写邮件页实际读到的内容**，用户确认的就是将要发送的内容 */
-    data class Confirm(val to: String, val subject: String, val body: String) : TaskEvent
+    data class Confirm(val to: String, val subject: String, val body: String, val kind: String = "email") : TaskEvent
+
+    /** 已停在 Amazon 提交订单页：交给用户付款。用户点「去完成」后 [TaskBackend.handoff] 把页面移到主屏 */
+    data class Handoff(val where: String, val summary: String) : TaskEvent
 
     data class Succeeded(val title: String, val detail: String, val evidence: List<String>, val image: Bitmap?) : TaskEvent
     data class Failed(val reason: String, val leftovers: List<String>) : TaskEvent
@@ -40,6 +43,9 @@ interface TaskBackend {
 
     /** 用户在确认卡片上的选择（发送 / 修改 / 取消）。 */
     fun confirm(choice: ConfirmChoice)
+
+    /** 用户点了交接卡片上的「去完成」：把 Amazon 从虚拟屏移到主屏 */
+    fun handoff()
 
     /** 停止当前任务并清理虚拟屏 */
     fun stop()

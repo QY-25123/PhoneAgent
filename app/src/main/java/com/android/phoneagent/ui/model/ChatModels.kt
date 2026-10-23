@@ -32,6 +32,8 @@ sealed interface ChatItem {
         val subject: String,
         val body: String,
         val state: ConfirmState,
+        /** email：待发送的邮件；cart：购物车修改清单（按钮是确认/取消） */
+        val kind: String = "email",
     ) : ChatItem
 
     /** 选项类提问。 */

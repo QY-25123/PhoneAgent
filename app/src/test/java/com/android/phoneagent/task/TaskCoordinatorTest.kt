@@ -32,6 +32,8 @@ class TaskCoordinatorTest {
         override suspend fun prepare(): PhoneController { prepares++; return phone }
         override fun newRunLog(): RunLog = NoopRunLog
         override fun thumbnail(width: Int): Bitmap? = null
+        var handoffs = 0
+        override suspend fun handoffToMain() { handoffs++; releases++ }
         override suspend fun release() { releases++ }
     }
 
@@ -124,6 +126,7 @@ class TaskCoordinatorTest {
             override suspend fun prepare(): PhoneController = throw IllegalStateException("没有连上 Shizuku")
             override fun newRunLog(): RunLog = NoopRunLog
             override fun thumbnail(width: Int): Bitmap? = null
+            override suspend fun handoffToMain() {}
             override suspend fun release() {}
         }
         val c = TaskCoordinator(CoroutineScope(StandardTestDispatcher(testScheduler) + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> println("EXC $e"); e.printStackTrace(System.out) }), FakeModel(listOf(ready)), env, { NOW })

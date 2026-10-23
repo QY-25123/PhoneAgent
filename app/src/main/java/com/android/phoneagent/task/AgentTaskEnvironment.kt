@@ -28,6 +28,18 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
         return Bitmap.createScaledBitmap(f, width, f.height * width / f.width, true)
     }
 
+    /** 把虚拟屏上的 Amazon 任务移到主屏（display 0），然后释放虚拟屏。 */
+    override suspend fun handoffToMain() {
+        val id = Agent.displayId
+        if (id >= 0) {
+            val tasks = Agent.withPriv("列出任务") { it.listTasks(id) }
+            // 每行：rootId childIds 组件 visible=…；取第一个 Amazon 的根任务
+            val root = tasks.lines().firstOrNull { it.contains("com.amazon.mShop") }?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.toIntOrNull()
+            if (root != null) Agent.withPriv("移到主屏") { it.moveTaskToDisplay(root, 0) }
+        }
+        release()
+    }
+
     override suspend fun release() {
         if (Agent.displayId < 0) return
         // stop() 在特权线程上异步执行 release；等虚拟屏标记消失

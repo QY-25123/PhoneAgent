@@ -56,6 +56,9 @@ sealed interface ClarifyOutcome {
     /** 邮件任务信息齐全：复述一句话，然后开始写草稿（发送前一定会让用户确认）。 */
     data class ReadyEmail(val task: EmailTask, val restatement: String) : ClarifyOutcome
 
+    /** Amazon 任务信息齐全：复述一句话，然后开始（agent 永不付款，停在提交订单页）。 */
+    data class ReadyShopping(val task: ShoppingTask, val restatement: String) : ClarifyOutcome
+
     /** 不开始任务，只回复（不支持的任务、闲聊、还没做的功能）。 */
     data class Reply(val text: String) : ClarifyOutcome
 
@@ -71,7 +74,7 @@ class Clarifier(
     private val model: ModelClient,
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     /** 目前能执行的任务类型（M2：只有日历）。识别出来但不能执行的会说明还在开发中 */
-    private val enabledKinds: Set<String> = setOf("calendar", "email"),
+    private val enabledKinds: Set<String> = setOf("calendar", "email", "shopping"),
     private val log: RunLog = NoopRunLog,
 ) {
     suspend fun clarify(dialog: List<DialogTurn>): ClarifyOutcome {
@@ -113,8 +116,7 @@ class Clarifier(
             "unsupported" -> return ClarifyOutcome.Reply(str("reply") ?: Prompts.capabilityText(enabledKinds))
             "chitchat" -> return ClarifyOutcome.Reply(str("reply") ?: Prompts.capabilityText(enabledKinds))
             "email" -> if (kind in enabledKinds) return decideEmail(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
-            "shopping" ->
-                if (kind !in enabledKinds) return ClarifyOutcome.Reply(Prompts.notYetText(kind!!, enabledKinds))
+            "shopping" -> if (kind in enabledKinds) return decideShopping(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "calendar" -> Unit
             else -> return ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
         }
@@ -140,6 +142,19 @@ class Clarifier(
         val assumed = if (dur == null) listOf("时长按 1 小时算") else emptyList()
         val task = CalendarTask(title!!, date!!, start!!, dur ?: DEFAULT_DURATION_MIN, assumed)
         return ClarifyOutcome.Ready(task, task.restatement(mappedFrom == "提醒"))
+    }
+
+    /** Amazon：目标商品必填（也可以是「用购物车里现有的」）；数量默认 1。 */
+    private fun decideShopping(o: JSONObject, mappedFrom: String?, options: List<String>): ClarifyOutcome {
+        fun str(k: String) = if (o.isNull(k)) null else o.optString(k).trim().takeIf { it.isNotEmpty() }
+        val useCart = !o.isNull("use_cart") && o.optBoolean("use_cart")
+        val product = str("product")
+        if (!useCart && product == null) {
+            return ClarifyOutcome.Ask(str("question") ?: "想买什么商品？也可以说「用购物车里现有的」。", options, mappedFrom)
+        }
+        val qty = if (o.isNull("quantity")) 1 else o.optInt("quantity").coerceIn(1, 20)
+        val task = ShoppingTask(if (useCart) null else product, qty, useCart, str("cart_request"))
+        return ClarifyOutcome.ReadyShopping(task, task.restatement())
     }
 
     /** 邮件：收件人和「邮件要表达的内容」必填；主题和正文由模型写好（只用用户给的信息）。 */

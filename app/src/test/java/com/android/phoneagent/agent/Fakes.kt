@@ -28,6 +28,7 @@ class FakeModel(private val replies: List<Any>) : ModelClient {
 fun clarifyJson(
     type: String = "calendar", title: String? = null, date: String? = null, start: String? = null, duration: Int? = null,
     recipient: String? = null, content: String? = null, subject: String? = null, body: String? = null,
+    product: String? = null, useCart: Boolean? = null, quantity: Int? = null, cartRequest: String? = null,
     missing: List<String> = emptyList(), question: String? = null, options: List<String> = emptyList(),
     mappedFrom: String? = null, reply: String? = null,
 ): String = JSONObject().apply {
@@ -35,6 +36,7 @@ fun clarifyJson(
     put("start_time", start ?: JSONObject.NULL); put("duration_minutes", duration ?: JSONObject.NULL)
     put("recipient", recipient ?: JSONObject.NULL); put("email_content", content ?: JSONObject.NULL)
     put("email_subject", subject ?: JSONObject.NULL); put("email_body", body ?: JSONObject.NULL)
+    put("product", product ?: JSONObject.NULL); put("use_cart", useCart ?: JSONObject.NULL); put("quantity", quantity ?: JSONObject.NULL); put("cart_request", cartRequest ?: JSONObject.NULL)
     put("missing", JSONArray(missing)); put("assumed", JSONArray()); put("question", question ?: JSONObject.NULL)
     put("options", JSONArray(options)); put("mapped_from", mappedFrom ?: JSONObject.NULL); put("reply", reply ?: JSONObject.NULL)
 }.toString()
@@ -77,6 +79,8 @@ class FakePhone(
     var emailTask: EmailTask? = null
     var emailLaunch: ActionOutcome = ActionOutcome(true, "ok")
     override suspend fun launchEmailCompose(task: EmailTask): ActionOutcome { emailTask = task; return emailLaunch }
+    val amazonUrls = ArrayList<String>()
+    override suspend fun launchAmazon(url: String): ActionOutcome { amazonUrls += url; return ActionOutcome(true, "ok") }
     val opened = ArrayList<String>()
     override suspend fun openApp(app: String): ActionOutcome { opened += app; return ActionOutcome(true, "ok") }
     var armResult: (String) -> Boolean = { true }
@@ -141,3 +145,26 @@ fun gmailScreen(to: String = "qijie_jerry@163.com", subject: String = "[PA测试
 }
 
 fun inboxScreen(vararg labels: String) = screenOf("收件箱", *labels)
+
+/** 合成 Amazon 购物车页：[n] 件商品，每件有 Delete；底部「Proceed to checkout」。 */
+fun cartScreen(n: Int = 1): PerceptionResult {
+    val click = setOf(ElementAction.CLICK)
+    var i = 0
+    fun el(type: String, text: String?, desc: String? = null, a: Set<ElementAction> = emptySet()): UiElement { i++; return UiElement(i, "c$i".padEnd(4, 'x'), type, text, desc, null, null, null, "android.widget.Button", Bounds(0, i * 100, 900, i * 100 + 80), a, false, null, true) }
+    val els = ArrayList<UiElement>()
+    els += el("Text", "Subtotal ($n ${if (n == 1) "item" else "items"}): \$7.99")
+    els += el("Button", "Proceed to checkout", null, click)
+    for (k in 1..n) { els += el("Button", null, "Delete 商品$k 很长的名字", click); els += el("Button", null, "Increase quantity by one, Quantity is 1, 商品$k", click) }
+    return PerceptionResult(ScreenState(2, AppCatalog.AMAZON, "Amazon", 1080, 2400, 0, els, screenshotJpeg = byteArrayOf(1)), "App: amazon 购物车", PerceptionTimings(0, 1, 1, 1, 1, 1))
+}
+
+fun orderScreen(): PerceptionResult {
+    var i = 0
+    fun el(type: String, text: String, a: Set<ElementAction> = emptySet()): UiElement { i++; return UiElement(i, "o$i".padEnd(4, 'x'), type, text, null, null, null, null, "android.widget.Button", Bounds(0, i * 100, 900, i * 100 + 80), a, false, null, true) }
+    val els = listOf(el("Button", "Place your order", setOf(ElementAction.CLICK)), el("Text", "Items:"), el("Text", "\$7.99"), el("Text", "Order total:"), el("Text", "\$16.44"))
+    return PerceptionResult(ScreenState(2, AppCatalog.AMAZON, "Amazon", 1080, 2400, 0, els, screenshotJpeg = byteArrayOf(1)), "App: amazon 提交订单页", PerceptionTimings(0, 1, 1, 1, 1, 1))
+}
+
+fun cartPlanJson(vararg changes: Triple<String, String, Int?>, question: String? = null) =
+    JSONObject().put("changes", JSONArray(changes.map { JSONObject().put("item", it.first).put("action", it.second).put("quantity", it.third ?: JSONObject.NULL) }))
+        .put("question", question ?: JSONObject.NULL).toString()
