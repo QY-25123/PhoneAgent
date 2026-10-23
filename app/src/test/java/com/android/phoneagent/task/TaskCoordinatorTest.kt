@@ -111,7 +111,7 @@ class TaskCoordinatorTest {
     @Test fun clarificationStopsAfterSixRounds() = runTest {
         val (c, _, events) = setup(listOf(clarifyJson(missing = listOf("标题"), question = "叫什么？")))
         c.submit("加个日历事项")
-        repeat(7) { settle(); c.submit("嗯") }
+        repeat(6) { settle(); c.submit("嗯") }   // 第 6 次回答之后第 7 次澄清仍要追问，超过上限；再多发就是新任务了
         settle()
         assertThat(events.filterIsInstance<TaskEvent.Ask>()).hasSize(6)
         assertThat((events.last() as TaskEvent.AgentSaid).text).contains("换个说法")

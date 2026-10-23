@@ -40,6 +40,15 @@ Kotlin + Jetpack Compose + Shizuku（api / provider）。参考 scrcpy server �
 - `safety` 的规则类（`SafetyGuard`）只依赖 Android 视图类型，不依赖 `privileged`；它被 UserService 进程里的 `privileged` 调用（硬拦截在特权侧执行，模型绕不过）。
 - 模块间的数据结构是 `ScreenState` / `Action` / `TaskState`（草案，随里程碑调整并同步 `docs/dev-plan.md`）。
 
+## 任务流程与模型（M2）
+- 对话页输入 → `task.TaskCoordinator`（澄清 → 执行 → 结果，事件经 `TaskBackend` 给界面）→ `agent.Clarifier`（PRD 6.9）→ `agent.AgentLoop`（观察→决策→一个动作→执行，30 步 / 60 次模型调用 / 连续 3 次失败 / 连续 3 步无变化 / 同一界面重复同一动作 都会停）。
+- 模型在 `agent.Models`：澄清用 `claude-sonnet-5-5`，每步决策和自查用 `claude-haiku-5-5`（更快更便宜）；debug 命令 `model --es clarify|step|verify <模型名>` 可临时切换做对比。调用走官方 Anthropic Java SDK（`ClaudeModelClient`，结构化输出）。
+- 日历任务：先用「插入事项」意图（`IPrivileged.launchIntent`）在虚拟屏打开新建页并预填；本地核对一致就走快速通道直接点保存（`CalendarFastPath`），再自查一次；对不上交给模型。
+- 点击/输入按感知给出的节点引用精确执行（`clickNode` / `setTextNode`），不按坐标猜节点；失败才退回坐标。
+- 每次任务记录在 `<外部私有目录>/runs/<时间>/`（每步标注截图、模型输入输出、token、耗时、费用）。
+- 真实测试脚本（会产生真实模型费用和真实日历事项，标题带 `[TAG]` 前缀，默认 `PA测试`）：`scripts/m2_task.sh "任务文字" [追问的回答...]`、`TAG=xxx CASES="B C" scripts/m2_t1_suite.sh`、`scripts/m2_verify_event.sh`（用日历内容提供者核对事项）。
+- M1 脚本：`scripts/m1_record.sh`（重录样本）、`scripts/m1_sanitize.py`（脱敏）、`scripts/m1_samples.sh`（离线感知）、`scripts/m1_safety_prime.sh`（Prime 订阅按钮拦截的设备验证）。
+
 ## API Key
 - 开发用 Key 只放 `local.properties` 的 `CLAUDE_API_KEY`（该文件已在 `.gitignore`），构建时注入 **debug** 的 `BuildConfig.CLAUDE_API_KEY`；release 构建不注入。缺失时为空字符串，构建不失败。
 - Key 不进代码、日志、Git、截图。发布版由用户在设置里输入并存 Keystore（M5）。

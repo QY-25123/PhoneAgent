@@ -11,7 +11,8 @@ class ModelMessage(val role: String, val text: String, val jpegImages: List<Byte
 object Models {
     const val SONNET = "claude-sonnet-5-5"
     const val HAIKU = "claude-haiku-5-5"
-    @Volatile var clarify = HAIKU
+    // 澄清要把相对日期换算对、不乱追问：实测 Haiku 会多问「下周一是 10/26 还是 11/2」，所以澄清用 Sonnet；决策和自查用 Haiku
+    @Volatile var clarify = SONNET
     @Volatile var step = HAIKU
     @Volatile var verify = HAIKU
 
