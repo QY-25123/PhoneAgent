@@ -196,3 +196,9 @@ sealed interface TaskState {
 - 基线（整理前）：`regress.sh` guard_test / back_test / ime_test 全 PASS。
 - 整理后：单元测试 3 个全绿；`regress.sh` 全 PASS；假数据 UI 流程（启动→对话→点示例→追问卡片）与整理前一致；`assembleRelease` 通过，release 的 `BuildConfig.CLAUDE_API_KEY` 为空串，Key 不在 Git（工作区和全部历史）中。
 - 提交：`4ab45c9` 包移动、`7a6eed0` 数据结构/Key/测试环境、本次 CLAUDE.md。
+
+# M1 完成记录（2026-10-23）
+
+- 单元测试 63 个全绿（感知相关 60 个，含 7 个真机样本的关键元素验收）；`regress.sh` 全 PASS。
+- 单次感知（不含等待稳定）实测 32～83ms，目标 <1s；详见 `docs/perception-samples.md`。
+- 标注截图和文本结果：`docs/perception/`（由脱敏样本离线生成，`scripts/m1_samples.sh` 可重新生成）。
