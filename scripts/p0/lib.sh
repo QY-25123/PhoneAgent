@@ -11,7 +11,7 @@ pat() { # pat CMD KEY 'value with spaces' [更多参数]：带空格的字符串
 boot() { # 干净启动：停止、重启 App、连接、建虚拟屏。$1 可追加 config 参数
   adb shell svc power stayon true; adb shell input keyevent KEYCODE_WAKEUP
   pa stop; sleep 1; adb shell am force-stop $PKG; sleep 1
-  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+  adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 2
   pa config --ez keepfull true --ez pause false $1; pa connect; sleep 4; pa display; sleep 3
 }
 vdisplay() { adb shell dumpsys display | grep -oE "^  Display [0-9]+:" | grep -v " 0:" | grep -oE "[0-9]+" | head -1; }

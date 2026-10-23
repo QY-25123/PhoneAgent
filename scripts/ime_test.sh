@@ -96,7 +96,7 @@ check() { # $1=步骤名
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 pa stop; sleep 1
 adb shell am force-stop $PKG; sleep 1
-adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 2
 pa config --ez pause false $CFG   # 默认配置：只靠 STEAL_TOP_FOCUS_DISABLED 标志，不暂停。对照实验：CFG='--ez steal false'
 pa connect; sleep 4
 pa display; sleep 3

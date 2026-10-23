@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 系统启动页图标（288dp 画布，图标在中心 192dp 圆内） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.95"
+        android:scaleY="0.95">
+        <path android:pathData="M41,30 H67 A14,14 0 0 1 81,44 V58 A14,14 0 0 1 67,72 H48 L35,82 V72 H41 A14,14 0 0 1 27,58 V44 A14,14 0 0 1 41,30 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="27"
+                    android:startY="30"
+                    android:endX="81"
+                    android:endY="82"
+                    android:startColor="#9FFBFE"
+                    android:endColor="#2559D3" />
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M46,58 L62,42 M52,42 H62 V52"
+            android:strokeWidth="4.5"
+            android:strokeColor="#000000"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

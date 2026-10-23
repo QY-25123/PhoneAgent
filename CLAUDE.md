@@ -33,3 +33,6 @@ Kotlin + Jetpack Compose + Shizuku（api / provider）。参考 scrcpy server �
 - 特权代码在 `priv/`（UserService，shell uid）；`UiAutomationHelper` 是可复用的界面树/输入模块。
 - 回归脚本在 `scripts/`：`regress.sh`（总入口）= `guard_test.sh` + `back_test.sh` + `ime_test.sh`。改动 `priv/`、`Agent`、`UserActivityGuard` 后都要跑。结论和约束见 `docs/spike-summary.md`、`docs/known-issues.md`。
 - 虚拟屏必须带 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED` 创建（否则用户的键盘会被收起/抢走）；虚拟屏上的动作经过 `UserActivityGuard`（「用户打字时暂停」安全开关，默认关闭）；返回键必须用带 displayId 的 KeyEvent，禁止 `GLOBAL_ACTION_BACK`。
+- **界面**（v0.5，对话为中心）在 `app/src/main/java/com/android/phoneagent/ui/`：`theme/`（颜色、字体、间距、圆角、尺寸、图标令牌）、`components/`、`screens/`、`model/`（假数据和演示脚本）、`nav/`（Navigation Compose）、`gallery/`（界面目录和 @Preview）。视觉规范 `docs/DESIGN.md`。**业务界面只能用主题令牌，不写颜色/dp/sp 字面量。**界面阶段用假数据，不接入 agent 逻辑，不改 `priv/`、守卫、拦截等核心代码。
+- 技术验证用的测试界面保留在「设置 → 开发者调试」。回归脚本用 `am start -n com.android.phoneagent/.MainActivity --es route debug` 直接打开它（该入口下返回键会关闭 Activity）。
+- 渲染设计稿截图：`scripts/design/render_screens.sh`（debug 的 `GalleryActivity` + `adb screencap`，输出到 `docs/design/screens/`）。

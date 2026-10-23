@@ -50,7 +50,7 @@ move_and_check "日历" $CAL "UV2 草稿 draft-123"
 grep -q "UV2 草稿 draft-123" "$OUT/tree.txt"; check "日历：移动后主屏上草稿标题仍在" $?
 # 清理：放弃草稿（在主屏上操作，不保存）
 pat clicktext t "Cancel" --ez touch true --ei display 0; sleep 2; pat clicktext t "Discard" --ez touch true --ei display 0; sleep 2
-adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1
+adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 1
 
 echo "== Gmail：新建邮件草稿（已填收件人芯片、主题，未发送）"
 GM=com.google.android.gm
@@ -64,7 +64,7 @@ grep -q "UV2 草稿 gmail-draft-456" "$OUT/tree.txt"; check "Gmail：移动后�
 grep -q "Recipients: qijie_jerry@163.com" "$OUT/tree.txt"; check "Gmail：移动后收件人芯片仍在" $?
 # 清理：在主屏上丢弃这份草稿（本验证创建的草稿；撰写界面 More options → Discard，没有确认框）
 pat clicktext t "More options" --ez touch true --ei display 0; sleep 2; pat clicktext t "Discard" --ez touch true --ei display 0; sleep 3
-adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1
+adb shell input keyevent KEYCODE_HOME; sleep 1; adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 1
 
 pa stop; sleep 1
 echo "  停止后 ATM 显示屏：$(adb shell dumpsys activity activities | grep 'Display: mDisplayId=' | tr -d '\n ' )"

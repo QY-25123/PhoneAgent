@@ -33,7 +33,7 @@ echo "|---|---|---|---|---|---|"
 run() { # $1=key|global $2=S1|S2
   adb shell svc power stayon true
   pa stop; sleep 1; adb shell am force-stop $PKG; sleep 1
-  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+  adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 2
   pa connect; sleep 4; pa display; sleep 3; pa launch; sleep 4
   pa tap --ei x 400 --ei y 740; sleep 3          # 虚拟屏进入「Network & internet」子页
   local before after top alive res=PASS cmd=back

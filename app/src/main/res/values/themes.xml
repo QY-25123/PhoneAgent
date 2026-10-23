@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- 应用主题：纯黑窗口背景（深色优先）。界面颜色由 Compose 的主题令牌决定。 -->
+    <style name="Theme.PhoneAgent" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 
-    <style name="Theme.PhoneAgent" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Android 12+ 启动页：纯黑背景 + 居中 App 图标，之后切到 Theme.PhoneAgent -->
+    <style name="Theme.PhoneAgent.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#000000</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.PhoneAgent</item>
+    </style>
 </resources>

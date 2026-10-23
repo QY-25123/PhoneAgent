@@ -52,7 +52,7 @@ record() { # $1=名称 $2=PASS|FAIL $3=详情
 adb shell svc power stayon true
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 pa stop; sleep 1; adb shell am force-stop $PKG; sleep 1
-adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 2
 pa config --ez pause true $CFG   # 安全开关默认关，这里测它所以打开；CFG 可追加其他实验开关
 pa connect; sleep 4; pa display; sleep 3; pa launch; sleep 4
 VD=$(vdisplay)
@@ -132,7 +132,7 @@ echo "$V_AFTER" | grep -q 'text="你好，世界"' || { C_OK=0; C_DETAIL="$C_DET
 [ $C_OK = 1 ] && record "c 动作完成后焦点回主屏，主屏返回键作用在主屏" PASS "动作完成后 top display=0；用户返回键关掉了主屏的 PhoneAgent，虚拟屏搜索页保持不变" \
               || record "c 动作完成后焦点回主屏，主屏返回键作用在主屏" FAIL "$C_DETAIL"
 
-adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 1
+adb shell am start -n $PKG/.MainActivity --es route debug >/dev/null; sleep 1
 pa stop; sleep 2
 
 echo; echo "| 验收项 | 结果 | 说明 |"; echo "|---|---|---|"
