@@ -202,6 +202,18 @@ object Agent {
         report("界面树已输出到 logcat")
     }
 
+    /** 感知：取虚拟屏的原始快照（JSON）。返回 null 表示未连接。 */
+    fun snapshot(display: Int = displayId): String? = priv?.snapshotTree(display)
+
+    /** debug：取一份快照存文件，并记录耗时和大小（M1 性能测量）。 */
+    fun snapshotTo(file: java.io.File, display: Int = displayId) = call("快照", executor = readIo) {
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        val json = it.snapshotTree(display)
+        val ms = android.os.SystemClock.elapsedRealtime() - t0
+        file.writeText(json)
+        report("SNAPSHOT ${ms}ms ${json.length}B ${file.absolutePath}")
+    }
+
     /** debug：验证期间发测试邮件只能发给这个白名单地址。 */
     fun armGmailSend(recipient: String) = call("布防发送", executor = readIo) {
         require(recipient.equals("qijie_jerry@163.com", true)) { "测试邮件只能发给 qijie_jerry@163.com" }

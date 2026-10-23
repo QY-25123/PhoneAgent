@@ -2,10 +2,14 @@ package com.android.phoneagent.privileged
 
 import com.android.phoneagent.safety.SafetyGuard
 import android.app.UiAutomation
+import android.graphics.Rect
+import android.os.Build
 import android.os.Bundle
 import android.os.HandlerThread
 import android.os.Looper
 import android.view.accessibility.AccessibilityNodeInfo
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * 在 shell 进程里连接 UiAutomation，用于读取指定屏幕的界面结构、向输入框写文字。
@@ -137,6 +141,67 @@ class UiAutomationHelper {
         return null
     }
 
+
+    /**
+     * 感知用的原始快照（JSON）：指定屏幕上所有窗口及其全部节点的属性，一次性在本进程取完再整体返回（减少跨进程调用）。
+     * 格式见 perception/RawSnapshot；解析、筛选、编号都在 App 进程里做。
+     */
+    fun snapshot(displayId: Int, maxNodes: Int = SNAPSHOT_MAX_NODES): String {
+        val windows = JSONArray()
+        var budget = maxNodes
+        var truncated = false
+        for (w in connect().windowsOnAllDisplays[displayId].orEmpty()) {
+            val root = (if (Build.VERSION.SDK_INT >= 34) {
+                w.getRoot(AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID)
+            } else w.root) ?: continue
+            val nodes = JSONArray()
+            val before = budget
+            budget = snapshotNode(root, 0, nodes, budget)
+            if (budget <= 0) truncated = true
+            val r = Rect().also { w.getBoundsInScreen(it) }
+            windows.put(JSONObject().put("id", w.id).put("type", w.type).put("layer", w.layer).put("title", w.title?.toString())
+                .put("focused", w.isFocused).put("active", w.isActive).put("b", JSONArray(listOf(r.left, r.top, r.right, r.bottom)))
+                .put("pkg", root.packageName?.toString()).put("nodeCount", before - budget).put("nodes", nodes))
+        }
+        return JSONObject().put("version", 1).put("display", displayId).put("time", System.currentTimeMillis())
+            .put("truncated", truncated).put("windows", windows).toString()
+    }
+
+    /** 深度优先把节点写进 [out]，返回剩余预算。 */
+    private fun snapshotNode(n: AccessibilityNodeInfo, depth: Int, out: JSONArray, budget: Int): Int {
+        if (budget <= 0 || depth > SNAPSHOT_MAX_DEPTH) return budget
+        var left = budget - 1
+        val r = Rect().also { n.getBoundsInScreen(it) }
+        val o = JSONObject().put("d", depth).put("cls", n.className?.toString()).put("b", JSONArray(listOf(r.left, r.top, r.right, r.bottom)))
+        n.viewIdResourceName?.let { o.put("res", it) }
+        n.text?.let { o.put("text", it.toString()) }
+        n.contentDescription?.let { o.put("desc", it.toString()) }
+        n.hintText?.let { o.put("hint", it.toString()) }
+        o.put("vis", n.isVisibleToUser)
+        // 只写为真的标志，快照更小
+        if (n.isClickable) o.put("clk", true)
+        if (n.isLongClickable) o.put("lclk", true)
+        if (n.isEditable) o.put("edit", true)
+        if (n.isScrollable) o.put("scr", true)
+        if (n.isFocused) o.put("foc", true)
+        if (n.isCheckable) o.put("chkable", true)
+        if (n.isChecked) o.put("chk", true)
+        if (n.isSelected) o.put("sel", true)
+        if (!n.isEnabled) o.put("dis", true)
+        if (n.isPassword) o.put("pw", true)
+        for (a in n.actionList) when (a.id) {
+            AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> o.put("sf", true)
+            AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> o.put("sb", true)
+        }
+        out.put(o)
+        for (i in 0 until n.childCount) {
+            val c = n.getChild(i) ?: continue
+            left = snapshotNode(c, depth + 1, out, left)
+            if (left <= 0) break
+        }
+        return left
+    }
+
     /** 界面树的文本形式：每行一个节点。 */
     fun dump(displayId: Int): String {
         val sb = StringBuilder()
@@ -165,5 +230,10 @@ class UiAutomationHelper {
         if (pred(n)) return n
         for (i in 0 until n.childCount) n.getChild(i)?.let { c -> findFirst(c, pred)?.let { return it } }
         return null
+    }
+
+    companion object {
+        const val SNAPSHOT_MAX_NODES = 2500
+        const val SNAPSHOT_MAX_DEPTH = 60
     }
 }

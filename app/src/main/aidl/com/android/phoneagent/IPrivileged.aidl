@@ -45,6 +45,9 @@ interface IPrivileged {
 
     // 某块屏幕上的根任务列表（UV-3 冲突检测 / UV-2 交接用）
     String listTasks(int displayId) = 17;
+    // 感知用：指定屏幕上所有窗口和节点的原始快照（JSON，格式见 perception/RawSnapshot）
+    String snapshotTree(int displayId) = 22;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

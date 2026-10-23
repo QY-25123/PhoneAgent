@@ -77,6 +77,7 @@ class PrivilegedService : IPrivileged.Stub() {
         return ui.setTextOnFocused(displayId, text)
     }
     override fun dumpTree(displayId: Int): String = ui.dump(displayId)
+    override fun snapshotTree(displayId: Int): String = ui.snapshot(displayId)
     override fun setImePolicy(displayId: Int, policy: Int): Int {
         val wm = Class.forName("android.view.IWindowManager\$Stub").getMethod("asInterface", android.os.IBinder::class.java)
             .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "window"))
