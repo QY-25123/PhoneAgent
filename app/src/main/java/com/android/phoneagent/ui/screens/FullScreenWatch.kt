@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.input.pointer.pointerInput
+import com.android.phoneagent.ui.components.RoundIconButton
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import com.android.phoneagent.ui.components.ButtonKind
@@ -59,9 +60,21 @@ import com.android.phoneagent.ui.theme.AppTheme
 @Composable
 fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpanded: Boolean = false) {
     val c = AppTheme.colors
+    // 退出只能触发一次：下滑手势会连续回调，之前每次回调都 popBackStack，把对话首页也弹掉，整个 App 就退出了
+    var exited by remember { mutableStateOf(false) }
+    val exitOnce: () -> Unit = { if (!exited) { exited = true; onExit() } }
+    // 下滑退出：累计下滑超过一段距离、手指抬起时才算
+    val swipeDownToExit: suspend androidx.compose.ui.input.pointer.PointerInputScope.() -> Unit = {
+        var total = 0f
+        detectVerticalDragGestures(
+            onDragStart = { total = 0f },
+            onDragCancel = { total = 0f },
+            onDragEnd = { if (total > 160f) exitOnce(); total = 0f },
+        ) { _, dy -> total += dy }
+    }
     var expanded by remember { mutableStateOf(startExpanded) }
     val live = controller.activeLive
-    BackHandler { if (expanded) expanded = false else onExit() }
+    BackHandler { if (expanded) expanded = false else exitOnce() }
 
     Column(Modifier.fillMaxSize().background(c.background).windowInsetsPadding(WindowInsets.statusBars)) {
         // 顶部细条
@@ -70,10 +83,12 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
                 .fillMaxWidth()
                 .height(AppTheme.sizes.button)
                 .background(c.surface)
-                .pointerInput(Unit) { detectVerticalDragGestures { _, dy -> if (dy > 24f) onExit() } }
+                .pointerInput(Unit, swipeDownToExit)
                 .padding(horizontal = AppTheme.space.s4),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // 明确的退出按钮：回到对话页（任务继续在后台跑，不会被停止）
+            RoundIconButton(AppIcons.close, exitOnce, Modifier.padding(end = AppTheme.space.s3))
             Text(live?.status?.label ?: "没有进行中的任务", style = AppTheme.type.label, color = c.text, modifier = Modifier.weight(1f))
             Text("步骤 ${live?.step ?: 0}/${live?.total ?: 30}", style = AppTheme.type.caption, color = c.textSecondary)
         }
@@ -82,7 +97,7 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
             Modifier
                 .weight(if (expanded) 0.35f else 1f)
                 .fillMaxWidth()
-                .pointerInput(Unit) { detectVerticalDragGestures { _, dy -> if (dy > 24f) onExit() } },
+                .pointerInput(Unit, swipeDownToExit),
             contentAlignment = Alignment.Center,
         ) {
             if (live != null) {
@@ -119,7 +134,7 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
                     icon = if (controller.paused) AppIcons.play else AppIcons.pause,
                     enabled = live != null && live.status != LiveStatus.DONE && live.status != LiveStatus.STOPPED,
                 )
-                PillButton("停止", { controller.stop(); onExit() }, kind = ButtonKind.Danger, icon = AppIcons.stop, enabled = controller.busy)
+                PillButton("停止", { controller.stop(); exitOnce() }, kind = ButtonKind.Danger, icon = AppIcons.stop, enabled = controller.busy)
             }
         }
     }

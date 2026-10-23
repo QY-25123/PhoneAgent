@@ -76,7 +76,8 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
                 run("点击 #${action.index}") {
                     // 无障碍语义点击优先（不产生触摸事件）：按节点引用精确点击，界面变了/点不了再用坐标点击
                     val b = e.bounds
-                    val semantic = e.nodeIndex >= 0 && Agent.withPriv("点击 #${action.index}", guarded = true) {
+                    // Amazon 的页面是 WebView：无障碍点击常常「成功」但页面没反应（实测 Proceed to checkout），WebView 里直接用触摸点击
+                    val semantic = screen.packageName != AppCatalog.AMAZON && e.nodeIndex >= 0 && Agent.withPriv("点击 #${action.index}", guarded = true) {
                         it.clickNode(displayId, e.windowId, e.nodeIndex, b.left, b.top, b.right, b.bottom)
                     }
                     if (!semantic) Agent.withPriv("点击 #${action.index}", guarded = true) { it.tap(displayId, x, y) }

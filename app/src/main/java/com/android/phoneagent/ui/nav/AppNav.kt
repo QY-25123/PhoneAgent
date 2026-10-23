@@ -85,7 +85,7 @@ fun PhoneAgentApp(startRoute: String? = null) {
                     }
                 }
             }
-            composable(Routes.FullScreen) { FullScreenWatch(controller, onExit = { nav.popBackStack() }) }
+            composable(Routes.FullScreen) { FullScreenWatch(controller, onExit = { if (nav.previousBackStackEntry != null) nav.popBackStack() }) }
             composable(Routes.Settings) { SettingsScreen(onBack = { nav.popBackStack() }, onDebug = { nav.navigate(Routes.Debug) }) }
             // 回归脚本直接打开调试界面时它是起始页，返回键应该关掉 Activity（和原来的首页行为一致）
             composable(Routes.Debug) { DebugScreen(onBack = { if (!nav.popBackStack()) activity.finish() }) }
