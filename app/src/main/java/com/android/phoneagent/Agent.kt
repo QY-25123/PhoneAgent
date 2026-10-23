@@ -91,6 +91,12 @@ object Agent {
     /** 主屏测试输入框的当前内容（MainActivity 同步过来），仅供 debug 回归脚本读取，比读界面树可靠。 */
     @Volatile var mainFieldText = ""
 
+    private var floating: FloatingWindow? = null
+    fun overlay(op: String, text: String = "") {
+        if (floating == null) floating = FloatingWindow(appContext, onStop = { stop() }, onOpen = { Log.i(TAG, "点击小窗：进入全屏观看（待实现）") })
+        when (op) { "on" -> floating?.show(text.ifEmpty { "执行中" }); "text" -> floating?.update(text); "off" -> floating?.hide() }
+    }
+
     /** 用户正在主屏打字，agent 动作被暂停。 */
     var waitingForUser by mutableStateOf(false)
         private set
