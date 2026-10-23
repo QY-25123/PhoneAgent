@@ -148,7 +148,9 @@ class ShoppingFlow(
                     loop().run(CartEditTask(plan))
                 } finally { runCatching { phone.disarmCartChanges() } }
                 if (r is LoopResult.Failure) return ShoppingResult.Failed("修改购物车没能完成：${r.reason}", r.leftovers)
-                host.say("购物车已修改：" + plan.joinToString("；") { it.describe() })   // 直接告诉用户做了什么
+                host.say("购物车已修改：" + plan.joinToString("；") { it.describe() })
+                // 改完购物车空了：没有可结算的商品，到这里为止
+                if (CartReader.read(phone.perceive().state).itemCount == 0) return ShoppingResult.Cancelled("购物车现在是空的，没有可结算的商品。")   // 直接告诉用户做了什么
             }
         }
         val r = loop().run(CheckoutTask(fromCart = true, t = task))
