@@ -145,6 +145,7 @@ object ElementExtractor {
                             actions = actionsOf(node), focused = node.focused,
                             checked = if (node.checkable) node.checked else null,
                             enabled = !node.disabled, password = node.password, idHint = idHint, mergedFromOverlap = fromOverlap,
+                            windowId = w.id, nodeIndex = i,
                         ),
                     )
                 )

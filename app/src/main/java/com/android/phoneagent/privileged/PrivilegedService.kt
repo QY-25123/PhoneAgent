@@ -34,6 +34,16 @@ class PrivilegedService : IPrivileged.Stub() {
         if (out.contains("Error")) error(out.trim())
     }
 
+    /** 只放行日历「插入事项」意图：-a ...INSERT 且 -d content://com.android.calendar/...（其他意图一律拒绝）。 */
+    override fun launchIntent(displayId: Int, amArgs: Array<String>) {
+        require(amArgs.contains("android.intent.action.INSERT") && amArgs.any { it.startsWith("content://com.android.calendar/") }) { "不允许的意图" }
+        val cmd = listOf("am", "start", "--display", displayId.toString(), "--activity-clear-task") + amArgs
+        val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().readText()
+        p.waitFor()
+        if (out.contains("Error")) error(out.trim())
+    }
+
     private fun resolveLauncher(pkg: String): String {
         val p = ProcessBuilder("cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg)
             .redirectErrorStream(true).start()
@@ -96,6 +106,16 @@ class PrivilegedService : IPrivileged.Stub() {
         guardPoint(displayId, x, y)
         return ui.clickAt(displayId, x.toInt(), y.toInt())
     }
+    override fun clickNode(displayId: Int, windowId: Int, nodeIndex: Int, left: Int, top: Int, right: Int, bottom: Int): Boolean {
+        guardPoint(displayId, (left + right) / 2f, (top + bottom) / 2f)
+        return ui.clickNode(displayId, windowId, nodeIndex, left, top, right, bottom)
+    }
+
+    override fun setTextNode(displayId: Int, windowId: Int, nodeIndex: Int, left: Int, top: Int, right: Int, bottom: Int, text: String): Boolean {
+        guardPoint(displayId, null, null)
+        return ui.setTextNode(displayId, windowId, nodeIndex, left, top, right, bottom, text)
+    }
+
     override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
     override fun globalBack() = ui.globalBack()
 

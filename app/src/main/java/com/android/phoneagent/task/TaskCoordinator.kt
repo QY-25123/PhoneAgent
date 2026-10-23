@@ -1,0 +1,174 @@
+package com.android.phoneagent.task
+
+import android.graphics.Bitmap
+import com.android.phoneagent.agent.AgentLoop
+import com.android.phoneagent.agent.CalendarTask
+import com.android.phoneagent.agent.ClarifyOutcome
+import com.android.phoneagent.agent.Clarifier
+import com.android.phoneagent.agent.DialogTurn
+import com.android.phoneagent.agent.LoopConfig
+import com.android.phoneagent.agent.LoopHost
+import com.android.phoneagent.agent.LoopResult
+import com.android.phoneagent.agent.ModelClient
+import com.android.phoneagent.agent.PhoneController
+import com.android.phoneagent.agent.RunLog
+import com.android.phoneagent.agent.StepInfo
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.time.ZonedDateTime
+
+/** 任务运行的外部环境（真实实现用虚拟屏和 Shizuku；测试里用假的）。 */
+interface TaskEnvironment {
+    /** 确保能操作手机并返回控制器；失败抛 [IllegalStateException]（message 给用户看） */
+    suspend fun prepare(): PhoneController
+    fun newRunLog(): RunLog
+    /** 虚拟屏当前画面的小图（宽约 [width] 像素），没有则 null */
+    fun thumbnail(width: Int): Bitmap?
+    /** 任务结束或被停止：关掉虚拟屏上的任务并释放 */
+    suspend fun release()
+}
+
+/**
+ * 一条对话任务的完整流程：澄清（追问 → 复述）→ 执行循环 → 结果。界面通过 [TaskBackend] 提交文字、订阅事件。
+ * 同一时间只运行一个任务（PRD FR-LOOP-5）。
+ */
+class TaskCoordinator(
+    private val scope: CoroutineScope,
+    private val model: ModelClient,
+    private val env: TaskEnvironment,
+    private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
+    private val cfg: LoopConfig = LoopConfig(),
+) : TaskBackend {
+    private val _events = MutableSharedFlow<TaskEvent>(extraBufferCapacity = 256)
+    override val events: SharedFlow<TaskEvent> = _events
+
+    private val _busy = MutableStateFlow(false)
+    override val busy: StateFlow<Boolean> = _busy
+
+    private val lock = Any()
+    private var session: Job? = null
+    private var pendingAnswer: CompletableDeferred<String>? = null
+
+    override fun submit(text: String): Boolean {
+        val t = text.trim()
+        if (t.isEmpty()) return false
+        synchronized(lock) {
+            pendingAnswer?.let { it.complete(t); pendingAnswer = null; return false }
+            if (session?.isActive == true) {
+                emit(TaskEvent.AgentSaid("我还在处理上一件事，你可以先停止它。"))
+                return false
+            }
+            _busy.value = true
+            session = scope.launch { runSession(t) }
+            return true
+        }
+    }
+
+    override fun stop() {
+        val job: Job?
+        synchronized(lock) { job = session; pendingAnswer = null }
+        if (job?.isActive != true) return
+        job.cancel()
+        scope.launch {
+            job.join()
+            withContext(NonCancellable) { env.release() }
+            emit(TaskEvent.Stopped("已停止。"))
+            _busy.value = false
+        }
+    }
+
+    private fun emit(e: TaskEvent) {
+        // 事件摘要写到 logcat（tag PA），自动化测试脚本靠它判断进度
+        android.util.Log.i("PA", "TASK " + when (e) {
+            is TaskEvent.AgentSaid -> "说：${e.text}"
+            is TaskEvent.Ask -> "问：${e.text} 选项=${e.options}"
+            is TaskEvent.Started -> "开始：${e.title}"
+            is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
+            is TaskEvent.Succeeded -> "成功：${e.title} ${e.detail}"
+            is TaskEvent.Failed -> "失败：${e.reason}"
+            is TaskEvent.Stopped -> "停止：${e.reason}"
+        })
+        _events.tryEmit(e)
+    }
+
+    private suspend fun awaitUser(): String {
+        val d = CompletableDeferred<String>()
+        synchronized(lock) { pendingAnswer = d }
+        return d.await()
+    }
+
+    private suspend fun runSession(first: String) {
+        val log = env.newRunLog()
+        try {
+            val clarifier = Clarifier(model, clock, log = log)
+            val dialog = arrayListOf(DialogTurn(true, first))
+            var rounds = 0
+            while (true) {
+                when (val o = clarifier.clarify(dialog)) {
+                    is ClarifyOutcome.Failed -> { emit(TaskEvent.AgentSaid("出了点问题：${o.reason}")); return }
+                    is ClarifyOutcome.Reply -> { emit(TaskEvent.AgentSaid(o.text)); return }
+                    is ClarifyOutcome.Ask -> {
+                        if (++rounds > MAX_CLARIFY_ROUNDS) { emit(TaskEvent.AgentSaid("信息还是不够，你换个说法再告诉我一次吧。")); return }
+                        dialog += DialogTurn(false, o.question)
+                        emit(TaskEvent.Ask(o.question, o.options))
+                        dialog += DialogTurn(true, awaitUser())
+                    }
+                    is ClarifyOutcome.Ready -> { emit(TaskEvent.AgentSaid(o.restatement)); execute(o.task, log); return }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e   // stop() 负责收尾
+        } finally {
+            if (session?.isCancelled != true) _busy.value = false
+        }
+    }
+
+    private suspend fun execute(task: CalendarTask, log: RunLog) {
+        emit(TaskEvent.Started("日历 · ${task.title}", cfg.maxSteps))
+        var lastStep = 0
+        try {
+            val phone = try { env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+            }
+            val host = object : LoopHost {
+                override fun onStep(info: StepInfo) {
+                    info.number?.let { lastStep = it }
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+            }
+            val result = AgentLoop(model, phone, host, cfg, clock, log).run(task)
+            val image = env.thumbnail(EVIDENCE_W)   // 释放虚拟屏之前取最后一帧
+            when (result) {
+                is LoopResult.Success -> emit(TaskEvent.Succeeded(
+                    "日历里已有「${task.title}」",
+                    "${task.date.monthValue}月${task.date.dayOfMonth}日（${com.android.phoneagent.agent.weekdayZh(task.date.dayOfWeek)}） " +
+                        "%02d:%02d–%02d:%02d".format(task.start.hour, task.start.minute, task.end.hour, task.end.minute),
+                    listOf(result.evidence.ifBlank { "在界面上看到了该事项" }, "标题和时间与你说的一致（${result.steps} 步，${result.modelCalls} 次模型调用）"),
+                    image,
+                ))
+                is LoopResult.Failure -> emit(TaskEvent.Failed(result.reason, result.leftovers))
+            }
+        } finally {
+            withContext(NonCancellable) { env.release() }
+        }
+    }
+
+    companion object {
+        const val MAX_CLARIFY_ROUNDS = 6
+        private const val THUMB_W = 360
+        private const val EVIDENCE_W = 540
+    }
+}

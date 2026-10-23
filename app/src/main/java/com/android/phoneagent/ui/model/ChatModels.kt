@@ -1,6 +1,7 @@
 package com.android.phoneagent.ui.model
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.annotation.DrawableRes
 import com.android.phoneagent.R
 
@@ -20,6 +21,8 @@ sealed interface ChatItem {
         val stepText: String,
         val status: LiveStatus,
         @DrawableRes val thumb: Int,
+        /** 真实流程里虚拟屏当前画面的小图；有它就不用 [thumb]（演示用的静态图） */
+        val thumbImage: ImageBitmap? = null,
     ) : ChatItem
 
     /** T2 确认卡片。 */
@@ -40,6 +43,7 @@ sealed interface ChatItem {
         val detail: String,
         val evidenceLines: List<String>,
         @DrawableRes val evidenceImage: Int?,
+        val evidenceBitmap: ImageBitmap? = null,
     ) : ChatItem
 
     @Immutable data class Failure(override val id: Long, val reason: String, val residue: List<String>) : ChatItem

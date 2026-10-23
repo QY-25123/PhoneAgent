@@ -54,4 +54,7 @@ data class UiElement(
     val idHint: String? = null,
     /** [mergedText] 取自「中心落在它边界内的其他文字节点」而不是它的子节点（可能只是恰好叠在一起，不一定是它自己的文字） */
     val mergedFromOverlap: Boolean = false,
+    /** 对应的原始节点：窗口 id + 窗口内先序下标（精确点击/写字用，-1 表示没有） */
+    val windowId: Int = -1,
+    val nodeIndex: Int = -1,
 )

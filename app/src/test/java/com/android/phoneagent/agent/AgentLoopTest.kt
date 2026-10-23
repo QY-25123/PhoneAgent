@@ -95,7 +95,8 @@ class AgentLoopTest {
 
     @Test fun threeStepsWithoutScreenChangeStop() = runTest {
         val phone = FakePhone({ screenOf("同一页", "保存") })
-        val r = loop(FakeModel(listOf(tap)), phone).run(TASK) as LoopResult.Failure
+        // 每次点不同的编号（不是重复同一个动作），界面却始终没变
+        val r = loop(FakeModel(listOf(stepJson("tap", index = 1), stepJson("tap", index = 2), stepJson("tap", index = 3), stepJson("tap", index = 4))), phone).run(TASK) as LoopResult.Failure
         assertThat(r.kind).isEqualTo(StopKind.NO_CHANGE)
         assertThat(r.steps).isEqualTo(3)
     }
@@ -105,6 +106,15 @@ class AgentLoopTest {
         val phone = FakePhone({ screenOf("页${it / 2}", "保存") })
         val r = loop(FakeModel(listOf(tap)), phone).run(TASK) as LoopResult.Failure
         assertThat(r.kind).isEqualTo(StopKind.STEP_LIMIT)
+    }
+
+    @Test fun sameActionOnTheSameScreenKeepsRepeatingStops() = runTest {
+        // 界面在 A、B 两页之间来回切（每次都有变化，不会触发「无变化」），模型在两页上各点同一个编号：打转
+        val phone = FakePhone({ screenOf(if (it % 2 == 0) "A" else "B", "保存", "取消") })
+        val r = loop(FakeModel(listOf(tap)), phone).run(TASK) as LoopResult.Failure
+        assertThat(r.kind).isEqualTo(StopKind.REPEATING)
+        assertThat(r.steps).isAtMost(7)
+        assertThat(r.reason).contains("反复")
     }
 
     @Test fun threeInvalidModelOutputsStop() = runTest {

@@ -71,6 +71,9 @@ class CmdReceiver : BroadcastReceiver() {
                     } finally { pending.finish() }
                 }
             }
+            // 真实任务入口（和对话页同一个进程级单例）：say 发一句话（新任务或对追问的回答），taskstop 停止
+            "say" -> android.util.Log.i("PA", "SAY 新任务=" + com.android.phoneagent.task.TaskBackends.get(context).submit(intent.getStringExtra("text") ?: ""))
+            "taskstop" -> com.android.phoneagent.task.TaskBackends.get(context).stop()
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))

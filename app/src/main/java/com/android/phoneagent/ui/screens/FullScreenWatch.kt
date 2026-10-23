@@ -86,7 +86,10 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
             contentAlignment = Alignment.Center,
         ) {
             if (live != null) {
-                Image(
+                if (live.thumbImage != null) Image(
+                    live.thumbImage, contentDescription = null, contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(AppTheme.space.s2).clip(AppTheme.shapes.small),
+                ) else Image(
                     painterResource(live.thumb), contentDescription = null, contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().padding(AppTheme.space.s2).clip(AppTheme.shapes.small),
                 )

@@ -21,6 +21,7 @@ import com.android.phoneagent.FloatingWindow
 import com.android.phoneagent.IPrivileged
 import com.android.phoneagent.perception.Perception
 import com.android.phoneagent.perception.PerceiveOptions
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch as launchCoroutine
 import com.android.phoneagent.privileged.PrivilegedService
 import com.android.phoneagent.safety.UserActivityGuard
@@ -163,6 +164,7 @@ object Agent {
         p.release()
         stopReader()
         preview = null
+        lastFull = null
         displayId = -1
         appContext.stopService(Intent(appContext, AgentService::class.java))
         cancelled = false
@@ -203,6 +205,34 @@ object Agent {
         saveTo?.writeText(tree)
         Log.i(TAG, "tree:\n$tree")
         report("界面树已输出到 logcat")
+    }
+
+    /** 在特权线程上执行一个调用（协程版）。[guarded] 的动作会经过 [UserActivityGuard]。异常原样抛出。 */
+    suspend fun <T> withPriv(what: String, guarded: Boolean = false, block: (IPrivileged) -> T): T =
+        kotlinx.coroutines.withContext(io.asCoroutineDispatcher()) {
+            val p = priv ?: throw IllegalStateException("UserService 未连接")
+            if (guarded) guard.guarded(what) { block(p) } else block(p)
+        }
+
+    /**
+     * 确保能操作虚拟屏：连接 Shizuku/UserService、创建虚拟屏、等到有画面。返回 displayId。
+     * 失败抛 [IllegalStateException]（message 是给用户看的原因）。
+     */
+    suspend fun ensureReady(): Int {
+        keepFull = true
+        if (previewFps < 5) previewFps = 5   // 感知要拿刚稳定下来的那一帧
+        if (priv == null) {
+            connect()
+            repeat(50) { if (priv == null) kotlinx.coroutines.delay(300) }
+            if (priv == null) throw IllegalStateException("没有连上 Shizuku。请确认 Shizuku 在运行并已授权给本应用")
+        }
+        if (displayId < 0) {
+            startDisplay()
+            repeat(50) { if (displayId < 0) kotlinx.coroutines.delay(300) }
+            if (displayId < 0) throw IllegalStateException("创建虚拟屏失败")
+        }
+        repeat(20) { if (lastFull == null) kotlinx.coroutines.delay(250) }
+        return displayId
     }
 
     /** 感知：取虚拟屏的原始快照（JSON）。返回 null 表示未连接。 */

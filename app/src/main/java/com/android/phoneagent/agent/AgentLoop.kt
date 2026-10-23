@@ -14,9 +14,11 @@ class LoopConfig(
     val maxUnchanged: Int = 3,
     val historyWindow: Int = 6,
     val maxSelfCheckFailures: Int = 2,
+    /** 同一个动作在同一个界面上出现这么多次（不要求连续）就判定为在打转 */
+    val maxRepeats: Int = 3,
 )
 
-enum class StopKind { MODEL_GAVE_UP, STEP_LIMIT, CALL_LIMIT, REPEATED_FAILURE, NO_CHANGE, MODEL_ERROR, BLOCKED, SELF_CHECK_FAILED }
+enum class StopKind { REPEATING, MODEL_GAVE_UP, STEP_LIMIT, CALL_LIMIT, REPEATED_FAILURE, NO_CHANGE, MODEL_ERROR, BLOCKED, SELF_CHECK_FAILED }
 
 sealed interface LoopResult {
     val steps: Int
@@ -64,6 +66,7 @@ class AgentLoop(
         var unchanged = 0
         var selfCheckFailures = 0
         var sigBeforeAction: String? = null
+        val seen = HashMap<String, Int>()   // 「界面签名 + 动作」出现次数
         val t0 = System.nanoTime()
 
         fun fail(kind: StopKind, reason: String): LoopResult {
@@ -158,6 +161,13 @@ class AgentLoop(
                 }
 
                 else -> {
+                    val key = sig + "|" + a
+                    val times = (seen[key] ?: 0) + 1
+                    seen[key] = times
+                    if (times >= cfg.maxRepeats) {
+                        log.step(steps, screen, decision, null, "同一个动作在同一个界面上重复了 $times 次")
+                        return fail(StopKind.REPEATING, "我在同一个界面上反复做同一个操作（${a.describe()}），没有进展，先停下了")
+                    }
                     steps++
                     host.onStep(StepInfo(steps, decision.understanding, a.describe(), screen))
                     val out = phone.execute(a, screen.state)

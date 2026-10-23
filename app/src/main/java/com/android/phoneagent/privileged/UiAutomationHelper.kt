@@ -88,6 +88,44 @@ class UiAutomationHelper {
         return false
     }
 
+    /**
+     * 按节点引用找到节点：在窗口 [windowId] 里按和 [snapshot] 相同的先序遍历数到第 [index] 个，且边界必须与 [expected] 一致
+     * （不一致说明界面在感知之后变了，返回 null，由调用方退回坐标点击）。
+     */
+    fun nodeByRef(displayId: Int, windowId: Int, index: Int, expected: Rect): AccessibilityNodeInfo? {
+        val w = connect().windowsOnAllDisplays[displayId].orEmpty().firstOrNull { it.id == windowId } ?: return null
+        val root = (if (Build.VERSION.SDK_INT >= 34) w.getRoot(AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID) else w.root) ?: return null
+        var counter = 0
+        fun walk(n: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+            if (depth > SNAPSHOT_MAX_DEPTH || counter > index) return null
+            if (counter++ == index) return n
+            for (i in 0 until n.childCount) {
+                val c = n.getChild(i) ?: continue
+                walk(c, depth + 1)?.let { return it }
+                if (counter > index) return null
+            }
+            return null
+        }
+        val node = walk(root, 0) ?: return null
+        val r = Rect().also { node.getBoundsInScreen(it) }
+        return node.takeIf { r == expected }
+    }
+
+    /** 精确语义点击：节点自己不可点击就找最近的可点击祖先（最多 3 层）。 */
+    fun clickNode(displayId: Int, windowId: Int, index: Int, l: Int, t: Int, r: Int, b: Int): Boolean {
+        var n = nodeByRef(displayId, windowId, index, Rect(l, t, r, b)) ?: return false
+        var up = 0
+        while (!n.isClickable && up++ < 3) n = n.parent ?: return false
+        return n.isClickable && n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    fun setTextNode(displayId: Int, windowId: Int, index: Int, l: Int, t: Int, r: Int, b: Int, text: String): Boolean {
+        val n = nodeByRef(displayId, windowId, index, Rect(l, t, r, b)) ?: return false
+        if (!n.isEditable) return false
+        val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+        return n.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
     /** 对坐标处最深的可点击节点执行 ACTION_CLICK（语义点击，不产生触摸事件）。 */
     fun clickAt(displayId: Int, x: Int, y: Int): Boolean {
         for (root in windowRoots(displayId).asReversed()) {

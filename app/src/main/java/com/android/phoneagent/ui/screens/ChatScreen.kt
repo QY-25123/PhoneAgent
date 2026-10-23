@@ -179,7 +179,7 @@ private fun ChatItemView(item: ChatItem, controller: ChatController, onOpenFullS
         )
         is ChatItem.Question -> QuestionCard(item, onChoose = { controller.onOption(item.id, it) })
         is ChatItem.Success -> SuccessCard(item)
-        is ChatItem.Failure -> FailureCard(item, onRetry = { controller.submit("重试") }, onSteps = onOpenFullScreen)
+        is ChatItem.Failure -> FailureCard(item, onRetry = { controller.retry() }, onSteps = onOpenFullScreen)
         is ChatItem.Handoff -> HandoffCard(item, onGo = { controller.goHandoff(item.id) })
     }
 }

@@ -48,6 +48,14 @@ interface IPrivileged {
     // 感知用：指定屏幕上所有窗口和节点的原始快照（JSON，格式见 perception/RawSnapshot）
     String snapshotTree(int displayId) = 22;
 
+    // 在虚拟屏上用 am start 启动一个 Intent（只允许日历的「插入事项」意图，参数由 agent 拼好）
+    void launchIntent(int displayId, in String[] amArgs) = 23;
+
+    // 按感知给出的节点引用（窗口 id + 先序下标 + 边界）精确点击/写字：重新遍历同一棵树取到那个节点，边界对不上（界面变了）就返回 false。
+    // 比按坐标找「最深的可点击节点」可靠：坐标处可能叠着多个节点（例如底部面板下面被盖住的工具栏）
+    boolean clickNode(int displayId, int windowId, int nodeIndex, int left, int top, int right, int bottom) = 24;
+    boolean setTextNode(int displayId, int windowId, int nodeIndex, int left, int top, int right, int bottom, String text) = 25;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

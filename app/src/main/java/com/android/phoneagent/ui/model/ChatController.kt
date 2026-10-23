@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
+import com.android.phoneagent.task.TaskBackend
+import com.android.phoneagent.task.TaskEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,7 +23,7 @@ enum class ConfirmAction { SEND, MODIFY, CANCEL }
  * 对话界面的假数据控制器：用脚本模拟一次完整流程（不接入 agent 逻辑，也不碰技术验证的核心代码）。
  * 流程：用户任务 → agent 简短回复 + 头像动画 → 实时画面卡片（步骤每隔几秒推进）→ 确认/提问/交接 → 结果。
  */
-class ChatController(private val stepMs: Long = 2500) {
+class ChatController(private val stepMs: Long = 2500, private val backend: TaskBackend? = null) {
     // 脚本协程由控制器自己持有：界面切到全屏观看再回来（对话页被销毁重建）时，任务不能被取消
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -43,6 +46,62 @@ class ChatController(private val stepMs: Long = 2500) {
 
     val activeLive: ChatItem.Live? get() = items.lastOrNull { it is ChatItem.Live } as? ChatItem.Live
 
+    // ---------------- 真实流程（M2）：订阅 task 层的事件 ----------------
+    // 界面只依赖 task 暴露的 [TaskBackend]；没有 backend 时仍是上面的假数据演示（画廊、开发者调试用）
+    private var lastTask: String? = null
+
+    init {
+        backend?.let { b ->
+            scope.launch { b.events.collect { handle(it) } }
+            scope.launch { b.busy.collect { busy = it } }
+        }
+    }
+
+    private fun handle(e: TaskEvent) {
+        when (e) {
+            is TaskEvent.AgentSaid -> add(ChatItem.Agent(id(), e.text))
+            is TaskEvent.Ask -> {
+                if (e.options.isEmpty()) add(ChatItem.Agent(id(), e.text)) else add(ChatItem.Question(id(), e.text, e.options, null))
+                if (activeLive?.status == LiveStatus.RUNNING) liveStatus(LiveStatus.WAITING, "等你回答")
+            }
+            is TaskEvent.Started -> {
+                workPulse++
+                steps.clear()
+                add(ChatItem.Live(id(), e.title, 0, e.maxSteps, "正在准备虚拟屏…", LiveStatus.RUNNING, Mocks.calendar))
+            }
+            is TaskEvent.Progress -> {
+                val live = activeLive ?: return
+                steps.add(StepRecord(e.step, e.saw, e.did))
+                replace(live.id) {
+                    (it as ChatItem.Live).copy(
+                        step = e.step ?: it.step, stepText = e.did, status = LiveStatus.RUNNING,
+                        thumbImage = e.thumb?.asImageBitmap() ?: it.thumbImage,
+                    )
+                }
+            }
+            is TaskEvent.Succeeded -> {
+                liveStatus(LiveStatus.DONE, e.title)
+                add(ChatItem.Success(id(), e.title, e.detail, e.evidence, null, e.image?.asImageBitmap()))
+            }
+            is TaskEvent.Failed -> {
+                liveStatus(LiveStatus.STOPPED, "已停止")
+                add(ChatItem.Failure(id(), e.reason, e.leftovers))
+            }
+            is TaskEvent.Stopped -> {
+                liveStatus(LiveStatus.STOPPED, "已停止")
+                add(ChatItem.Agent(id(), e.reason))
+            }
+        }
+    }
+
+    /** 失败卡片上的「重试」：从头再来一次（PRD FR-CON-5）。 */
+    fun retry() {
+        val t = lastTask
+        if (backend == null || t == null) return submit("重试")
+        add(ChatItem.Agent(id(), "好，我重新来一次。"))
+        backend.submit(t)
+    }
+
     private fun id() = nextId++
     private fun add(item: ChatItem) { items.add(item) }
     private fun replace(id: Long, f: (ChatItem) -> ChatItem) {
@@ -56,6 +115,10 @@ class ChatController(private val stepMs: Long = 2500) {
         val t = text.trim()
         if (t.isEmpty()) return
         add(ChatItem.User(id(), t))
+        if (backend != null) {
+            if (backend.submit(t)) lastTask = t
+            return
+        }
         textWaiter?.let { it.complete(t); textWaiter = null; return }
         if (busy) {
             add(ChatItem.Agent(id(), "我还在处理上一件事，你可以先停止它。"))
@@ -81,10 +144,12 @@ class ChatController(private val stepMs: Long = 2500) {
         replace(questionId) { (it as ChatItem.Question).copy(chosen = index) }
         val q = items.firstOrNull { it.id == questionId } as? ChatItem.Question
         if (q != null) add(ChatItem.User(id(), q.options[index]))
+        if (backend != null) { if (q != null) backend.submit(q.options[index]); return }
         optionWaiter?.complete(index); optionWaiter = null
     }
 
     fun stop() {
+        if (backend != null) { if (busy) backend.stop(); return }
         if (!busy) return
         job?.cancel()
         confirmWaiter = null; optionWaiter = null; textWaiter = null

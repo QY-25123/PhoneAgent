@@ -40,7 +40,9 @@ object Routes {
 @Composable
 fun PhoneAgentApp(startRoute: String? = null) {
     val nav = rememberNavController()
-    val controller = remember { ChatController() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // 对话首页接入真实流程（澄清 → 执行）；假数据演示留在开发者调试和画廊里
+    val controller = remember { ChatController(backend = com.android.phoneagent.task.TaskBackends.get(context)) }
     val dark = AgentProfile.darkTheme
     val start = startRoute ?: Routes.Splash
     val activity = androidx.compose.ui.platform.LocalContext.current as androidx.activity.ComponentActivity

@@ -39,7 +39,10 @@ fun LiveCard(item: ChatItem.Live, onOpen: () -> Unit, onStop: () -> Unit, modifi
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             Box(Modifier.fillMaxWidth().clickable(onClick = onOpen), contentAlignment = Alignment.Center) {
-                Image(
+                if (item.thumbImage != null) Image(
+                    item.thumbImage, contentDescription = null, contentScale = ContentScale.Fit,
+                    modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
+                ) else Image(
                     painterResource(item.thumb), contentDescription = null, contentScale = ContentScale.Fit,
                     modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
                 )
@@ -115,10 +118,13 @@ fun SuccessCard(item: ChatItem.Success, modifier: Modifier = Modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             CardMain(item.title)
             CardSub(item.detail)
-            if (item.evidenceImage != null) {
+            if (item.evidenceBitmap != null || item.evidenceImage != null) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Image(
-                        painterResource(item.evidenceImage), contentDescription = null, contentScale = ContentScale.Fit,
+                    if (item.evidenceBitmap != null) Image(
+                        item.evidenceBitmap, contentDescription = null, contentScale = ContentScale.Fit,
+                        modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
+                    ) else Image(
+                        painterResource(item.evidenceImage!!), contentDescription = null, contentScale = ContentScale.Fit,
                         modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
                     )
                 }
