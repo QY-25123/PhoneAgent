@@ -1,0 +1,100 @@
+package com.android.phoneagent.priv
+
+import android.app.UiAutomation
+import android.os.Bundle
+import android.os.HandlerThread
+import android.os.Looper
+import android.view.accessibility.AccessibilityNodeInfo
+
+/**
+ * 在 shell 进程里连接 UiAutomation，用于读取指定屏幕的界面结构、向输入框写文字。
+ * 连接时带 FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES，不会关掉用户已启用的无障碍服务。
+ * 可复用：后续读界面树用 [windowRoots] / [dump]。
+ */
+class UiAutomationHelper {
+    private var thread: HandlerThread? = null
+    private var automation: UiAutomation? = null
+
+    @Synchronized
+    fun connect(): UiAutomation {
+        automation?.let { return it }
+        // 回调要在另一个线程的 looper 上跑，否则 connect() 会自己等自己
+        val t = HandlerThread("uiautomation").also { it.start() }
+        try {
+            val connection = Class.forName("android.app.UiAutomationConnection").getDeclaredConstructor()
+                .apply { isAccessible = true }.newInstance()
+            val ua = UiAutomation::class.java
+                .getDeclaredConstructor(Looper::class.java, Class.forName("android.app.IUiAutomationConnection"))
+                .apply { isAccessible = true }.newInstance(t.looper, connection)
+            UiAutomation::class.java.getDeclaredMethod("connect", Int::class.java)
+                .apply { isAccessible = true }.invoke(ua, UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+            // 需要 INTERACTIVE_WINDOWS 才能取到非默认屏幕上的窗口
+            ua.serviceInfo = ua.serviceInfo.apply {
+                flags = flags or android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                    android.accessibilityservice.AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            }
+            thread = t
+            automation = ua
+            return ua
+        } catch (e: Throwable) {
+            t.quitSafely()
+            throw e
+        }
+    }
+
+    @Synchronized
+    fun close() {
+        automation?.let { ua ->
+            runCatching { UiAutomation::class.java.getDeclaredMethod("disconnect").apply { isAccessible = true }.invoke(ua) }
+        }
+        automation = null
+        thread?.quitSafely()
+        thread = null
+    }
+
+    /** 指定屏幕上所有窗口的根节点（调用方负责不长期持有）。 */
+    fun windowRoots(displayId: Int): List<AccessibilityNodeInfo> {
+        val windows = connect().windowsOnAllDisplays[displayId] ?: return emptyList()
+        return windows.mapNotNull { it.root }
+    }
+
+    /** 向指定屏幕上当前聚焦的输入框写文字（ACTION_SET_TEXT，不经过输入法）。 */
+    fun setTextOnFocused(displayId: Int, text: String): Boolean {
+        for (root in windowRoots(displayId)) {
+            val node = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                ?: findFirst(root) { it.isEditable && it.isFocused }
+                ?: continue
+            val args = Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
+            }
+            return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        }
+        return false
+    }
+
+    /** 界面树的文本形式：每行一个节点。 */
+    fun dump(displayId: Int): String {
+        val sb = StringBuilder()
+        for (root in windowRoots(displayId)) dumpNode(root, 0, sb)
+        return sb.toString()
+    }
+
+    private fun dumpNode(n: AccessibilityNodeInfo, depth: Int, sb: StringBuilder) {
+        val r = android.graphics.Rect().also { n.getBoundsInScreen(it) }
+        sb.append("  ".repeat(depth)).append(n.className).append(" [").append(r.flattenToString()).append(']')
+        n.viewIdResourceName?.let { sb.append(" id=").append(it) }
+        n.text?.let { sb.append(" text=\"").append(it).append('"') }
+        n.contentDescription?.let { sb.append(" desc=\"").append(it).append('"') }
+        if (n.isClickable) sb.append(" clickable")
+        if (n.isEditable) sb.append(" editable")
+        if (n.isFocused) sb.append(" focused")
+        sb.append('\n')
+        for (i in 0 until n.childCount) n.getChild(i)?.let { dumpNode(it, depth + 1, sb) }
+    }
+
+    private fun findFirst(n: AccessibilityNodeInfo, pred: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
+        if (pred(n)) return n
+        for (i in 0 until n.childCount) n.getChild(i)?.let { c -> findFirst(c, pred)?.let { return it } }
+        return null
+    }
+}

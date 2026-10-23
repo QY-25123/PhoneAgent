@@ -10,6 +10,7 @@ class PrivilegedService : IPrivileged.Stub() {
     private val context = FakeContext.create()
     private val display = VirtualDisplayHolder(context)
     private val input = InputInjector()
+    private val ui = UiAutomationHelper()
 
     override fun destroy() {
         System.exit(0)
@@ -33,9 +34,10 @@ class PrivilegedService : IPrivileged.Stub() {
         input.swipe(displayId, x1, y1, x2, y2, durationMs)
 
     override fun back(displayId: Int) = input.key(displayId, android.view.KeyEvent.KEYCODE_BACK)
-    override fun setText(displayId: Int, text: String): Boolean = throw UnsupportedOperationException("step 6")
-    override fun dumpTree(displayId: Int): String = throw UnsupportedOperationException("step 6")
+    override fun setText(displayId: Int, text: String): Boolean = ui.setTextOnFocused(displayId, text)
+    override fun dumpTree(displayId: Int): String = ui.dump(displayId)
     override fun release() {
+        ui.close()
         display.release()
     }
 }
