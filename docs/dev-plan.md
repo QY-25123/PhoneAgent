@@ -26,7 +26,7 @@ ui ──▶ task ──▶ agent ──▶ perception ──▶ privileged
 ```
 - `ui` 只依赖 `task` 暴露的状态（`StateFlow<TaskState>` 和少量命令），不直接调用下层。
 - `agent` 不直接碰 `privileged`：经 `perception`（读）和 `safety`（所有动作的必经检查）。
-- `privileged` 不依赖其他业务包。
+- `privileged` 不依赖其他业务包，**唯一例外**：它调用 `safety.SafetyGuard`——硬拦截必须在 UserService（shell 进程）里执行，模型绕不过；因此 `SafetyGuard` 只能依赖 Android 视图类型，不依赖 `privileged`（M0 实际落地如此）。
 
 ---
 
@@ -190,3 +190,9 @@ sealed interface TaskState {
 4. 单元测试：JUnit + Truth + mockk + coroutines-test。
 5. 新增购物车修改（M3 实现）：仅用户明确要求；执行前确认卡片逐项列改动；硬拦截只放行已确认的改动，与 Gmail 发送确认共用 `ConfirmToken`；完成验证购物车与改动一致；不允许「稍后购买」。
 6. 执行顺序：先单独提交文档 → 跑 `regress.sh` 记基线 → M0 分部分提交 → M0 完成后跑单元测试和 `regress.sh`，通过后停下来汇报。
+
+# M0 完成记录（2026-10-23）
+
+- 基线（整理前）：`regress.sh` guard_test / back_test / ime_test 全 PASS。
+- 整理后：单元测试 3 个全绿；`regress.sh` 全 PASS；假数据 UI 流程（启动→对话→点示例→追问卡片）与整理前一致；`assembleRelease` 通过，release 的 `BuildConfig.CLAUDE_API_KEY` 为空串，Key 不在 Git（工作区和全部历史）中。
+- 提交：`4ab45c9` 包移动、`7a6eed0` 数据结构/Key/测试环境、本次 CLAUDE.md。

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 回归入口：改动 priv/、Agent、UserActivityGuard 之后都跑一遍。
+# 回归入口：改动 privileged/、safety/、task/Agent 之后都跑一遍。
 #   guard_test.sh  用户活动守卫验收（暂停/恢复/焦点回主屏）
 #   back_test.sh   返回键：带 displayId 的 KeyEvent 必须只作用于虚拟屏
 #   ime_test.sh    输入法隔离：键盘弹出时对虚拟屏下达一串动作，用户的输入目标不能变（现在由守卫暂停动作来保证）
