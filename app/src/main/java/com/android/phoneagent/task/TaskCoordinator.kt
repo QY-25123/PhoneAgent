@@ -62,6 +62,8 @@ class TaskCoordinator(
     private val env: TaskEnvironment,
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     private val cfg: LoopConfig = LoopConfig(),
+    /** 执行期间推虚拟屏小图的间隔；0 表示不推（单元测试里用，否则虚拟时间永远推不完） */
+    private val frameIntervalMs: Long = 900,
 ) : TaskBackend {
     private val _events = MutableSharedFlow<TaskEvent>(extraBufferCapacity = 256)
     override val events: SharedFlow<TaskEvent> = _events
@@ -87,7 +89,7 @@ class TaskCoordinator(
             pendingAnswer?.let { it.complete(t); pendingAnswer = null; return false }
             pendingConfirm?.let { earlyInstruction = t; it.complete(ConfirmChoice.MODIFY); pendingConfirm = null; emit(TaskEvent.ConfirmResolved(ConfirmChoice.MODIFY)); return false }
             if (session?.isActive == true) {
-                emit(TaskEvent.AgentSaid("我还在处理上一件事，你可以先停止它。"))
+                emit(TaskEvent.AgentSaid("上一件事还在处理，可以先点停止。"))
                 return false
             }
             _busy.value = true
@@ -114,7 +116,7 @@ class TaskCoordinator(
         scope.launch {
             handoffPending = false
             withContext(NonCancellable) { env.handoffToMain() }
-            emit(TaskEvent.AgentSaid("已把 Amazon 移到你的屏幕上，下单和付款由你来完成。"))
+            emit(TaskEvent.AgentSaid("已打开 Amazon，下单和付款请你来完成。"))
         }
     }
 
@@ -130,6 +132,7 @@ class TaskCoordinator(
         }
         // 事件摘要写到 logcat（tag PA），自动化测试脚本靠它判断进度
         android.util.Log.i("PA", "TASK " + when (e) {
+            is TaskEvent.Frame -> "画面"
             is TaskEvent.UserSaid -> "用户：${e.text}"
             is TaskEvent.AgentSaid -> "说：${e.text}"
             is TaskEvent.Ask -> "问：${e.text} 选项=${e.options}"
@@ -164,10 +167,10 @@ class TaskCoordinator(
             var rounds = 0
             while (true) {
                 when (val o = clarifier.clarify(dialog)) {
-                    is ClarifyOutcome.Failed -> { emit(TaskEvent.AgentSaid("出了点问题：${o.reason}")); return }
+                    is ClarifyOutcome.Failed -> { emit(TaskEvent.AgentSaid("出错了：${o.reason}")); return }
                     is ClarifyOutcome.Reply -> { emit(TaskEvent.AgentSaid(o.text)); return }
                     is ClarifyOutcome.Ask -> {
-                        if (++rounds > MAX_CLARIFY_ROUNDS) { emit(TaskEvent.AgentSaid("信息还是不够，你换个说法再告诉我一次吧。")); return }
+                        if (++rounds > MAX_CLARIFY_ROUNDS) { emit(TaskEvent.AgentSaid("信息还不够，换个说法再说一次吧。")); return }
                         dialog += DialogTurn(false, o.question)
                         emit(TaskEvent.Ask(o.question, o.options))
                         dialog += DialogTurn(true, awaitUser())
@@ -203,9 +206,10 @@ class TaskCoordinator(
     private suspend fun execute(task: CalendarTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("日历 · ${task.title}", cfg.maxSteps))
         var lastStep = 0
+        val frames = startFrames()
         try {
             val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
-                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
             }
             val host = object : LoopHost {
                 override fun onStep(info: StepInfo) {
@@ -224,22 +228,32 @@ class TaskCoordinator(
                     "日历里已有「${task.title}」",
                     "${task.date.monthValue}月${task.date.dayOfMonth}日（${com.android.phoneagent.agent.weekdayZh(task.date.dayOfWeek)}） " +
                         "%02d:%02d–%02d:%02d".format(task.start.hour, task.start.minute, task.end.hour, task.end.minute),
-                    listOf(result.evidence.ifBlank { "在界面上看到了该事项" }, "标题和时间与你说的一致（${result.steps} 步，${result.modelCalls} 次模型调用）"),
+                    listOf(result.evidence.ifBlank { "在日程里看到了该事项" }, "标题和时间与你说的一致"),
                     image,
                 ))
                 is LoopResult.Failure -> emit(TaskEvent.Failed(result.reason, result.leftovers))
             }
         } finally {
+            frames.cancel()
             withContext(NonCancellable) { env.release() }
+        }
+    }
+
+    /** 执行期间每隔约 1 秒推一张虚拟屏小图，让实时画面卡片和全屏观看是流动的（不进历史）。 */
+    private fun startFrames(): Job = scope.launch {
+        while (frameIntervalMs > 0) {
+            kotlinx.coroutines.delay(frameIntervalMs)
+            env.thumbnail(THUMB_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
         }
     }
 
     private suspend fun executeShopping(task: ShoppingTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("Amazon · ${task.product ?: "购物车"}", cfg.maxSteps))
         var handedOff = false
+        val frames = startFrames()
         try {
             val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
-                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
             }
             val host = object : ShoppingHost {
                 override fun onStep(info: StepInfo) {
@@ -260,12 +274,13 @@ class TaskCoordinator(
             when (val r = ShoppingFlow(model, phone, host, cfg, clock, log).run(task)) {
                 is ShoppingResult.Handoff -> {
                     handedOff = true; handoffPending = true
-                    emit(TaskEvent.Handoff("已到提交订单页", r.summary + "。我没有点下单，由你来付款。"))
+                    emit(TaskEvent.Handoff("已到提交订单页", r.summary + "。下单和付款请你来完成。"))
                 }
                 is ShoppingResult.Cancelled -> emit(TaskEvent.Stopped(r.note))
                 is ShoppingResult.Failed -> emit(TaskEvent.Failed(r.reason, r.leftovers))
             }
         } finally {
+            frames.cancel()
             if (!handedOff) withContext(NonCancellable) { env.release() }   // 交接成功时虚拟屏保留，等用户点「去完成」
         }
     }
@@ -273,9 +288,10 @@ class TaskCoordinator(
     private suspend fun executeEmail(task: EmailTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("邮件 · ${task.recipient}", cfg.maxSteps))
         val key = task.recipient.lowercase() + "|" + task.subject
+        val frames = startFrames()
         try {
             val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
-                emit(TaskEvent.Failed(e.message ?: "没能准备好虚拟屏", emptyList())); return
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
             }
             val host = object : EmailHost {
                 override fun onStep(info: StepInfo) {
@@ -296,7 +312,7 @@ class TaskCoordinator(
                         ConfirmChoice.MODIFY -> {
                             val early = synchronized(lock) { earlyInstruction.also { earlyInstruction = null } }
                             if (early != null) ConfirmDecision.Modify(early) else {
-                                emit(TaskEvent.Ask("想怎么改？直接告诉我就行。", emptyList()))
+                                emit(TaskEvent.Ask("想怎么改？", emptyList()))
                                 ConfirmDecision.Modify(awaitUser())
                             }
                         }
@@ -317,6 +333,7 @@ class TaskCoordinator(
                 is EmailResult.Failed -> { if (result.sendAttempted) sendAttempted += key; emit(TaskEvent.Failed(result.reason, result.leftovers)) }
             }
         } finally {
+            frames.cancel()
             withContext(NonCancellable) { env.release() }
         }
     }

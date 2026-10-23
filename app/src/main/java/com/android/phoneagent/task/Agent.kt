@@ -101,8 +101,9 @@ object Agent {
 
     private var floating: FloatingWindow? = null
     fun overlay(op: String, text: String = "") {
-        if (floating == null) floating = FloatingWindow(appContext, onStop = { stop() }, onOpen = { Log.i(TAG, "点击小窗：进入全屏观看（待实现）") })
-        when (op) { "on" -> floating?.show(text.ifEmpty { "执行中" }); "text" -> floating?.update(text); "off" -> floating?.hide() }
+        if (floating == null) floating = FloatingWindow(appContext, onOpen = { Log.i(TAG, "点击小窗") })
+        val stopAction = com.android.phoneagent.FloatAction("停止") { stop() }
+        when (op) { "on", "text" -> floating?.show("执行中", text.ifEmpty { "执行中" }, listOf(stopAction)); "off" -> floating?.hide() }
     }
 
     /** 用户正在主屏打字，agent 动作被暂停。 */
@@ -229,7 +230,7 @@ object Agent {
         if (displayId < 0) {
             startDisplay()
             repeat(50) { if (displayId < 0) kotlinx.coroutines.delay(300) }
-            if (displayId < 0) throw IllegalStateException("创建虚拟屏失败")
+            if (displayId < 0) throw IllegalStateException("准备失败，请重试")
         }
         repeat(20) { if (lastFull == null) kotlinx.coroutines.delay(250) }
         return displayId

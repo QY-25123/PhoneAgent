@@ -7,10 +7,8 @@ import java.net.URLEncoder
 
 /** Amazon 任务：买什么（或「用购物车里现有的」）、数量、用户明确要求的购物车改动。agent 永不付款，停在提交订单页。 */
 data class ShoppingTask(val product: String?, val quantity: Int, val useCart: Boolean, val cartRequest: String?) {
-    fun restatement(): String = if (useCart)
-        "好，我用购物车里现有的商品去结算，停在提交订单页，由你来付款，我不会点下单。现在去办。"
-    else
-        "好，我在 Amazon 搜「$product」，加入购物车（数量 $quantity），一路走到提交订单页停下，由你来付款，我不会点下单。现在去办。"
+    fun restatement(): String = if (useCart) "Amazon：购物车结算，到提交订单页，付款由你来"
+    else "Amazon：搜「$product」加购（×$quantity），到提交订单页，付款由你来"
 }
 
 object AmazonIntent {
@@ -27,7 +25,7 @@ object CartReader {
     fun read(s: ScreenState): CartInfo {
         if (s.packageName != AppCatalog.AMAZON) return CartInfo(null, emptyList())
         val blob = s.elements.joinToString("\n") { listOfNotNull(it.text, it.desc, it.mergedText).joinToString(" ") }
-        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull()
+        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull() ?: if (blob.contains("Your Amazon Cart is empty", ignoreCase = true)) 0 else null
         val titles = s.elements.mapNotNull { e -> (e.desc ?: e.text)?.takeIf { it.startsWith("Delete ") && ElementAction.CLICK in e.actions }?.removePrefix("Delete ")?.take(50) }.distinct()
         return CartInfo(n, titles)
     }
@@ -134,14 +132,15 @@ class ShoppingFlow(
         // 购物车里有多件商品：告诉用户结算会包含全部商品，让用户选
         val cart = CartReader.read(phone.perceive().state)
         val n = cart.itemCount
+        if (task.useCart && n == 0) return ShoppingResult.Failed("购物车是空的。告诉我想买什么。", emptyList())
         if (request == null && n != null && n >= 2) {
             val names = cart.titles.take(4).joinToString("；")
-            val a = host.askUser("结算会包含购物车里的全部 $n 件商品${if (names.isNotEmpty()) "：$names" else ""}。要全部结算，还是先调整购物车？", listOf("全部结算", "调整购物车"))
+            val a = host.askUser("结算会包含购物车里的全部 $n 件商品${if (names.isNotEmpty()) "：$names" else ""}。全部结算，还是先调整购物车？", listOf("全部结算", "调整购物车"))
             if (a.contains("调整")) request = host.askUser("想怎么调整？例如「把 XX 删掉」「XX 数量改成 2」。", emptyList())
         }
         if (request != null) {
-            val plan = planCartChanges(request) ?: return ShoppingResult.Failed("没能从购物车页看明白要怎么改，购物车没有被改动", emptyList())
-            if (plan.isEmpty()) host.say("没有需要改动的地方，我直接去结算。")
+            val plan = planCartChanges(request) ?: return ShoppingResult.Failed("没看明白要怎么改，购物车没有改动", emptyList())
+            if (plan.isEmpty()) host.say("无需改动，去结算。")
             else {
                 if (!host.confirmCartChanges(plan.map { it.describe() })) return ShoppingResult.Cancelled("已取消，购物车没有改动。")
                 val r = try {
@@ -149,7 +148,7 @@ class ShoppingFlow(
                     loop().run(CartEditTask(plan))
                 } finally { runCatching { phone.disarmCartChanges() } }
                 if (r is LoopResult.Failure) return ShoppingResult.Failed("修改购物车没能完成：${r.reason}", r.leftovers)
-                host.say("购物车已按你确认的清单修改好了：" + plan.joinToString("；") { it.describe() } + "。")   // 直接告诉用户做了什么
+                host.say("购物车已修改：" + plan.joinToString("；") { it.describe() })   // 直接告诉用户做了什么
             }
         }
         val r = loop().run(CheckoutTask(fromCart = true, t = task))

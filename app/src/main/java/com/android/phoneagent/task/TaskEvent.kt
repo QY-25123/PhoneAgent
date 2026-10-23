@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** 任务进行中发给界面的事件（界面只依赖这里，不直接碰 agent / privileged）。 */
 sealed interface TaskEvent {
+    /** 虚拟屏当前画面的小图（执行期间约每秒一张，不进历史）：实时画面卡片和全屏观看用它保持流畅 */
+    data class Frame(val thumb: Bitmap) : TaskEvent
+
     /** 用户说的话（不管是对话页输入的，还是别的入口提交的，界面都靠这个事件显示用户气泡） */
     data class UserSaid(val text: String) : TaskEvent
 

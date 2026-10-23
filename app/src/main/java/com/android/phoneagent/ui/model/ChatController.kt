@@ -61,6 +61,9 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     private fun handle(e: TaskEvent) {
         when (e) {
+            is TaskEvent.Frame -> activeLive?.let { l ->
+                if (l.status == LiveStatus.RUNNING || l.status == LiveStatus.WAITING) replace(l.id) { (it as ChatItem.Live).copy(thumbImage = e.thumb.asImageBitmap()) }
+            }
             is TaskEvent.UserSaid -> add(ChatItem.User(id(), e.text))
             is TaskEvent.AgentSaid -> add(ChatItem.Agent(id(), e.text))
             is TaskEvent.Ask -> {
@@ -70,7 +73,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
             is TaskEvent.Started -> {
                 workPulse++
                 steps.clear()
-                add(ChatItem.Live(id(), e.title, 0, e.maxSteps, "正在准备虚拟屏…", LiveStatus.RUNNING, Mocks.calendar))
+                add(ChatItem.Live(id(), e.title, 0, e.maxSteps, "准备中…", LiveStatus.RUNNING, Mocks.calendar))
             }
             is TaskEvent.Progress -> {
                 val live = activeLive ?: return
@@ -123,7 +126,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
     fun retry() {
         val t = lastTask
         if (backend == null || t == null) return submit("重试")
-        add(ChatItem.Agent(id(), "好，我重新来一次。"))
+        add(ChatItem.Agent(id(), "重试中。"))
         backend.submit(t)
     }
 

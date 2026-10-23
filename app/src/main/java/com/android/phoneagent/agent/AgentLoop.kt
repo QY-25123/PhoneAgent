@@ -124,7 +124,7 @@ class AgentLoop(
                 val out = phone.execute(tapAction, first.state)
                 log.step(steps, first, null, out, "快速通道：本地核对通过，直接执行")
                 history += Prompts.HistoryItem(steps, "页面各项与已确认信息一致（本地核对）", tapAction.describe(), if (out.ok) "成功" else "失败：${out.message}")
-                if (out.blocked) return fail(StopKind.BLOCKED, "这个操作被安全规则拦截了（${out.message}），我不会绕过它")
+                if (out.blocked) return fail(StopKind.BLOCKED, "操作被安全规则拦截（${out.message}），不会绕过")
                 if (out.ok) {
                     // 等保存/转场结束（编辑页消失）再自查，最多等约 3 秒，避免看到还没关掉的编辑页
                     var after = phone.perceive()
@@ -146,8 +146,8 @@ class AgentLoop(
         }
 
         while (true) {
-            if (steps >= cfg.maxSteps) return fail(StopKind.STEP_LIMIT, "已经执行了 ${cfg.maxSteps} 步还没完成，我先停下了")
-            if (calls >= cfg.maxModelCalls) return fail(StopKind.CALL_LIMIT, "这次任务的模型调用已经用到上限（${cfg.maxModelCalls} 次），我先停下了")
+            if (steps >= cfg.maxSteps) return fail(StopKind.STEP_LIMIT, "已执行 ${cfg.maxSteps} 步仍未完成，已停止")
+            if (calls >= cfg.maxModelCalls) return fail(StopKind.CALL_LIMIT, "模型调用已达上限（${cfg.maxModelCalls} 次），已停止")
 
             val screen = pending ?: phone.perceive()
             pending = null
@@ -157,7 +157,7 @@ class AgentLoop(
                 sigBeforeAction = null
                 if (unchanged >= cfg.maxUnchanged) {
                     log.step(steps, screen, null, null, "连续 $unchanged 步界面没有变化")
-                    return fail(StopKind.NO_CHANGE, "连续 ${cfg.maxUnchanged} 步操作之后界面都没有变化，我先停下了")
+                    return fail(StopKind.NO_CHANGE, "连续 ${cfg.maxUnchanged} 步操作后界面没有变化，已停止")
                 }
             }
 
@@ -194,7 +194,7 @@ class AgentLoop(
                 failures++
                 history += Prompts.HistoryItem(null, "", "（上一步输出格式不对，重试一次仍不对）", "未执行")
                 log.step(steps, screen, null, null, "输出不合法（重试后仍不合法）")
-                if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "模型连续 $failures 次给出了无法执行的回复，我先停下了")
+                if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "模型连续 $failures 次给出无法执行的回复，已停止")
                 continue
             }
             val a = decision.action
@@ -233,17 +233,17 @@ class AgentLoop(
                     seen[key] = times
                     if (times >= cfg.maxRepeats) {
                         log.step(steps, screen, decision, null, "同一个动作在同一个界面上重复了 $times 次")
-                        return fail(StopKind.REPEATING, "我在同一个界面上反复做同一个操作（${a.describe()}），没有进展，先停下了")
+                        return fail(StopKind.REPEATING, "同一界面反复做同一个操作（${a.describe()}），没有进展，已停止")
                     }
                     steps++
                     host.onStep(StepInfo(steps, decision.understanding, a.describe(), screen))
                     val out = phone.execute(a, screen.state)
                     log.step(steps, screen, decision, out)
                     history += Prompts.HistoryItem(steps, decision.understanding, a.describe(), if (out.ok) "成功" else "失败：${out.message}")
-                    if (out.blocked) return fail(StopKind.BLOCKED, "这个操作被安全规则拦截了（${out.message}），我不会绕过它")
+                    if (out.blocked) return fail(StopKind.BLOCKED, "操作被安全规则拦截（${out.message}），不会绕过")
                     if (out.ok) failures = 0 else {
                         failures++
-                        if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "连续 $failures 次操作失败（${out.message}），我先停下了")
+                        if (failures >= cfg.maxConsecutiveFailures) return fail(StopKind.REPEATED_FAILURE, "连续 $failures 次操作失败（${out.message}），已停止")
                     }
                     sigBeforeAction = sig
                 }

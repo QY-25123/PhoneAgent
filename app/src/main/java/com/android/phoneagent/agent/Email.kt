@@ -8,8 +8,7 @@ import com.android.phoneagent.perception.ScreenState
 data class EmailTask(val recipient: String, val subject: String, val body: String) {
     val hasAddress: Boolean get() = recipient.contains('@')
 
-    fun restatement(): String =
-        "好，我给 $recipient 写一封邮件，主题「$subject」。写好后先给你确认，你点发送我才会发。现在去办。"
+    fun restatement(): String = "邮件：发给 $recipient，主题「$subject」"
 }
 
 private fun norm(s: String) = s.replace(Regex("[\\s   ]+"), " ").trim()
@@ -150,7 +149,7 @@ class EmailFlow(
                 when (val d = host.confirm(draft)) {
                     ConfirmDecision.Cancel -> return cancel(draft)
                     is ConfirmDecision.Modify -> {
-                        if (++revisions > maxRevisions) return EmailResult.Failed("修改次数太多了，我先停下，草稿还留在 Gmail 里", listOf("Gmail 草稿箱里有主题为「${draft.subject}」的草稿"), false)
+                        if (++revisions > maxRevisions) return EmailResult.Failed("修改次数太多，已停止，草稿还在 Gmail 里", listOf("Gmail 草稿箱里有主题为「${draft.subject}」的草稿"), false)
                         val r = loop().run(ModifyDraftTask(draft, d.instruction))
                         if (r is LoopResult.Failure) return EmailResult.Failed(r.reason, r.leftovers, false)
                         draft = readDraft() ?: return EmailResult.Failed("改完之后没能读取到草稿内容", emptyList(), false)
@@ -162,12 +161,12 @@ class EmailFlow(
                         if (current == null || com.android.phoneagent.safety.ConfirmToken.hash(current) != shown) {
                             // 点发送之前页面内容和确认时不一致：不放行，把现在的内容重新给用户确认
                             if (current == null) return EmailResult.Failed("发送前没能读取到草稿内容，没有发送", emptyList(), false)
-                            host.say("草稿内容在你确认之后有变化，我把现在的内容重新给你确认一次。")
+                            host.say("草稿在确认后有变化，请重新确认。")
                             draft = current
                             continue
                         }
                         if (!phone.armGmailSend(shown)) {
-                            host.say("发送前的内容核对没有通过，我把现在的内容重新给你确认一次。")
+                            host.say("核对没有通过，请重新确认。")
                             draft = readDraft() ?: return EmailResult.Failed("没能重新读取草稿内容，没有发送", emptyList(), false)
                             continue
                         }
@@ -176,7 +175,7 @@ class EmailFlow(
                         val out = phone.execute(Action.Tap(idx), screen.state)
                         if (!out.ok) {
                             if (out.blocked) {
-                                host.say("发送被安全规则拦住了，我把现在的内容重新给你确认一次。")
+                                host.say("发送被拦住了，请重新确认。")
                                 draft = readDraft() ?: return EmailResult.Failed("发送被拦截，没能重新读取草稿", emptyList(), false)
                                 continue
                             }

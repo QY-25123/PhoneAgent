@@ -28,9 +28,8 @@ data class CalendarTask(
     fun restatement(mappedFromReminder: Boolean = false): String {
         val d = "${date.monthValue}月${date.dayOfMonth}日（${weekdayZh(date.dayOfWeek)}）"
         val t = "${fmt(start)}–${fmt(end)}"
-        val defaults = if (assumed.isEmpty()) "" else "，" + assumed.joinToString("，")
-        val lead = if (mappedFromReminder) "好，提醒我会做成日历事项，到时会通知你：「$title」" else "好，我在日历里加「$title」"
-        return "$lead：$d $t$defaults。现在去办。"
+        val defaults = if (assumed.isEmpty()) "" else "（默认 1 小时）"
+        return (if (mappedFromReminder) "日历提醒：" else "日历：") + "「$title」· $d$t$defaults"
     }
 
     /** 给执行循环的「已确认信息」。 */

@@ -103,7 +103,8 @@ fun DrawerContent(current: MainPage, onSelect: (MainPage) -> Unit, onSettings: (
             Text(it, style = AppTheme.type.body, color = c.textSecondary, maxLines = 1, modifier = Modifier.padding(vertical = AppTheme.space.s2))
         }
         Spacer(Modifier.weight(1f))
-        Row(Modifier.padding(bottom = AppTheme.space.s4)) { RoundIconButton(AppIcons.settings, onSettings, deep = true) }
+        Box(Modifier.padding(bottom = AppTheme.space.s2).fillMaxWidth().height(AppTheme.sizes.hairline).background(c.divider))
+        DrawerItem(AppIcons.settings, "设置", false, onSettings)   // 图标 + 文字，一眼能认出是设置
     }
 }
 

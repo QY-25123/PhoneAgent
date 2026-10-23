@@ -74,6 +74,17 @@ fun ChatScreen(
         if (items.isNotEmpty()) listState.animateScrollToItem(items.size)
     }
 
+    // 从悬浮小窗点进来：滚动到对应卡片（确认卡片 / 提问 / 交接）
+    val focus = com.android.phoneagent.ui.model.FocusRequest.target
+    LaunchedEffect(focus, items.size) {
+        val t = focus ?: return@LaunchedEffect
+        val idx = items.indexOfLast {
+            when (t) { "confirm" -> it is ChatItem.Confirm; "handoff" -> it is ChatItem.Handoff; else -> it is ChatItem.Question } 
+        }.takeIf { it >= 0 } ?: (items.size - 1).takeIf { it >= 0 }
+        if (idx != null) listState.animateScrollToItem(idx)
+        com.android.phoneagent.ui.model.FocusRequest.target = null
+    }
+
     val send = {
         if (input.isNotBlank()) { controller.submit(input); input = "" }
     }
@@ -123,7 +134,8 @@ fun TopArea(onMenu: () -> Unit, workPulse: Int, working: Boolean, modifier: Modi
     Box(
         modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(0f to c.background.copy(alpha = 0.92f), 0.7f to c.background.copy(alpha = 0.8f), 1f to c.background.copy(alpha = 0f)))
+            // 顶部不透明（滚动的内容不会从头像后面透出来），只在最下沿渐变消失
+            .background(Brush.verticalGradient(0f to c.background, 0.8f to c.background, 1f to c.background.copy(alpha = 0f)))
             .windowInsetsPadding(WindowInsets.statusBars)
             .height(AppTheme.sizes.topBar + AppTheme.space.s8),
     ) {

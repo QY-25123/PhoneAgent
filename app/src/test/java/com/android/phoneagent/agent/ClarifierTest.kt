@@ -20,7 +20,7 @@ class ClarifierTest {
         assertThat(r.task.start).isEqualTo(LocalTime.of(15, 0))
         assertThat(r.task.durationMinutes).isEqualTo(60)
         assertThat(r.task.assumed).containsExactly("时长按 1 小时算")
-        assertThat(r.restatement).isEqualTo("好，我在日历里加「[PA测试] 评审会」：10月28日（周三） 15:00–16:00，时长按 1 小时算。现在去办。")
+        assertThat(r.restatement).isEqualTo("日历：「[PA测试] 评审会」· 10月28日（周三）15:00–16:00（默认 1 小时）")
     }
 
     @Test fun explicitDurationIsUsedAndNotListedAsDefault() = runTest {
@@ -76,8 +76,8 @@ class ClarifierTest {
     @Test fun reminderThatIsCompleteIsRestatedAsACalendarEvent() = runTest {
         val c = clarifier(clarifyJson(title = "交报告", date = "2026-10-30", start = "14:00", mappedFrom = "提醒"))
         val r = c.clarify(user("下周五下午2点提醒我交报告")) as ClarifyOutcome.Ready
-        assertThat(r.restatement).startsWith("好，提醒我会做成日历事项，到时会通知你：「交报告」")
-        assertThat(r.restatement).contains("10月30日（周五） 14:00–15:00")
+        assertThat(r.restatement).startsWith("日历提醒：「交报告」")
+        assertThat(r.restatement).contains("10月30日（周五）14:00–15:00")
     }
 
     @Test fun unsupportedTaskRepliesWithoutStarting() = runTest {
@@ -187,7 +187,7 @@ class ClarifierTest {
         val c = emailClarifier(clarifyJson(type = "email", recipient = "qijie_jerry@163.com", content = "周五评审改到下午3点", subject = "[PA测试] 周五评审改期", body = "你好，周五评审改到下午3点。谢谢"))
         val r = c.clarify(user("给 qijie_jerry@163.com 发邮件")) as ClarifyOutcome.ReadyEmail
         assertThat(r.task).isEqualTo(EmailTask("qijie_jerry@163.com", "[PA测试] 周五评审改期", "你好，周五评审改到下午3点。谢谢"))
-        assertThat(r.restatement).contains("先给你确认")
+        assertThat(r.restatement).isEqualTo("邮件：发给 qijie_jerry@163.com，主题「[PA测试] 周五评审改期」")
     }
 
     @Test fun emailMissingRecipientAndContentAsksOnceForBoth() = runTest {

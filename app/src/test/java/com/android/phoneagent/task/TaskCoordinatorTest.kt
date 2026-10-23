@@ -39,7 +39,7 @@ class TaskCoordinatorTest {
 
     private fun TestScope.setup(replies: List<Any>, phone: PhoneController = FakePhone({ if (it == 0) editorScreen() else screenOf("日程", "x") })): Triple<TaskCoordinator, FakeEnv, MutableList<TaskEvent>> {
         val env = FakeEnv(phone)
-        val c = TaskCoordinator(CoroutineScope(StandardTestDispatcher(testScheduler) + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> println("EXC $e"); e.printStackTrace(System.out) }), FakeModel(replies), env, { NOW })
+        val c = TaskCoordinator(CoroutineScope(StandardTestDispatcher(testScheduler) + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> println("EXC $e"); e.printStackTrace(System.out) }), FakeModel(replies), env, { NOW }, frameIntervalMs = 0)
         val events = ArrayList<TaskEvent>()
         backgroundScope.launch(StandardTestDispatcher(testScheduler)) { c.events.toList(events) }
         return Triple(c, env, events)
@@ -55,7 +55,7 @@ class TaskCoordinatorTest {
         assertThat(c.submit("周二下午3点日历加 [PA测试] 评审会")).isTrue()
         settle()
         assertThat(events.map { it::class.simpleName }).containsAtLeast("AgentSaid", "Started", "Progress", "Succeeded").inOrder()
-        assertThat((events.first() as TaskEvent.AgentSaid).text).contains("现在去办")
+        assertThat(events.filterIsInstance<TaskEvent.AgentSaid>().first().text).contains("日历：「[PA测试] 评审会」")
         assertThat(c.busy.value).isFalse()
         assertThat(env.prepares).isEqualTo(1)      // 提前准备的虚拟屏被用上，没有重复创建
         assertThat(env.releases).isAtLeast(1)       // 任务结束后释放
@@ -129,7 +129,7 @@ class TaskCoordinatorTest {
             override suspend fun handoffToMain() {}
             override suspend fun release() {}
         }
-        val c = TaskCoordinator(CoroutineScope(StandardTestDispatcher(testScheduler) + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> println("EXC $e"); e.printStackTrace(System.out) }), FakeModel(listOf(ready)), env, { NOW })
+        val c = TaskCoordinator(CoroutineScope(StandardTestDispatcher(testScheduler) + kotlinx.coroutines.CoroutineExceptionHandler { _, e -> println("EXC $e"); e.printStackTrace(System.out) }), FakeModel(listOf(ready)), env, { NOW }, frameIntervalMs = 0)
         val events = ArrayList<TaskEvent>()
         backgroundScope.launch(StandardTestDispatcher(testScheduler)) { c.events.toList(events) }
         c.submit("周二下午3点日历加 [PA测试] 评审会")

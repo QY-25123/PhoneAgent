@@ -86,7 +86,7 @@ fun ConfirmCard(item: ChatItem.Confirm, onSend: () -> Unit, onModify: () -> Unit
             }
             when (item.state) {
                 ConfirmState.PENDING -> {
-                    CardSub(if (cart) "确认后才会改购物车，清单之外的商品不会动。" else "发送后不能撤回，Gmail 只有几秒的撤销时间。")
+                    CardSub(if (cart) "确认后才会修改。" else "发送后无法撤回。")
                     Row(Modifier.padding(top = AppTheme.space.s2), horizontalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
                         PillButton(if (cart) "确认" else "发送", onSend, kind = ButtonKind.Primary, icon = if (cart) AppIcons.check else AppIcons.send)
                         if (!cart) PillButton("修改", onModify, icon = AppIcons.edit)

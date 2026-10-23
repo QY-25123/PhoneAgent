@@ -14,16 +14,22 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 
+/** 小窗上的一个按钮。 */
+class FloatAction(val label: String, val primary: Boolean = false, val onClick: () -> Unit)
+
 /**
  * 悬浮小窗：只显示文字和按钮，不获取输入焦点（FLAG_NOT_FOCUSABLE），可拖动，松手吸附到左右边缘。
- * 原型版（UV-4 验证用），状态机和样式后续再做。
+ * 点文字区域 [onOpen]（打开 App 并定位到对应卡片），按钮由 [show] 传入（PRD 7.4 的各状态不同）。
  */
-class FloatingWindow(context: Context, private val onStop: () -> Unit, private val onOpen: () -> Unit) {
+class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
     private val ctx = context.applicationContext
     private val wm = ctx.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private var root: LinearLayout? = null
-    private var label: TextView? = null
+    private var title: TextView? = null
+    private var body: TextView? = null
+    private var buttons: LinearLayout? = null
+    private val dp = ctx.resources.displayMetrics.density
 
     private val lp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -38,33 +44,47 @@ class FloatingWindow(context: Context, private val onStop: () -> Unit, private v
         title = "PhoneAgent Overlay"
     }
 
-    fun show(text: String) = main.post {
+    private fun px(v: Int) = (v * dp).toInt()
+
+    /** 显示或更新：[heading] 是状态名（执行中、等待确认……），[text] 是一句话，[actions] 是按钮。 */
+    fun show(heading: String, text: String, actions: List<FloatAction>) = main.post {
         if (root == null) {
-            val dp = ctx.resources.displayMetrics.density
-            val tv = TextView(ctx).apply { setTextColor(Color.WHITE); textSize = 14f; setPadding((12 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt(), (8 * dp).toInt()) }
-            val stop = TextView(ctx).apply {
-                this.text = "停止"; setTextColor(Color.WHITE); textSize = 14f
-                setPadding((12 * dp).toInt(), (8 * dp).toInt(), (12 * dp).toInt(), (8 * dp).toInt())
-                setOnClickListener { Log.i("PA", "OVERLAY_STOP"); onStop() }
-            }
+            val h = TextView(ctx).apply { setTextColor(0xFFB0BEFF.toInt()); textSize = 11f }
+            val t = TextView(ctx).apply { setTextColor(Color.WHITE); textSize = 14f; maxLines = 2; maxWidth = px(220) }
+            val textCol = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; addView(h); addView(t) }
+            val btns = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             val r = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
-                background = GradientDrawable().apply { setColor(0xE6303F9F.toInt()); cornerRadius = 20 * dp }
-                addView(tv); addView(stop)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(px(14), px(8), px(6), px(8))
+                background = GradientDrawable().apply { setColor(0xF0202A6B.toInt()); cornerRadius = px(22).toFloat() }
+                addView(textCol); addView(btns)
                 setOnTouchListener(dragListener())
             }
-            label = tv; root = r
+            title = h; body = t; buttons = btns; root = r
             wm.addView(r, lp)
         }
-        label?.text = text
+        title?.text = heading
+        body?.text = text
+        buttons?.removeAllViews()
+        for (a in actions) {
+            buttons?.addView(TextView(ctx).apply {
+                this.text = a.label
+                setTextColor(if (a.primary) 0xFFFFFFFF.toInt() else 0xFFC5CBFF.toInt())
+                textSize = 14f
+                setPadding(px(12), px(8), px(12), px(8))
+                if (a.primary) background = GradientDrawable().apply { setColor(0xFF3D5AFE.toInt()); cornerRadius = px(16).toFloat() }
+                setOnClickListener { Log.i("PA", "OVERLAY_ACTION ${a.label}"); a.onClick() }
+            })
+        }
     }
-
-    fun update(text: String) = main.post { label?.text = text }
 
     fun hide() = main.post {
         root?.let { runCatching { wm.removeView(it) } }
-        root = null; label = null
+        root = null; title = null; body = null; buttons = null
     }
+
+    val isShowing get() = root != null
 
     private fun dragListener() = object : View.OnTouchListener {
         private var downX = 0f; private var downY = 0f; private var startX = 0; private var startY = 0; private var moved = false
@@ -82,7 +102,6 @@ class FloatingWindow(context: Context, private val onStop: () -> Unit, private v
                         val w = ctx.resources.displayMetrics.widthPixels
                         lp.x = if (e.rawX < w / 2f) 0 else w - v.width   // 吸附到最近的左右边缘
                         wm.updateViewLayout(v, lp)
-                        Log.i("PA", "OVERLAY_SNAP x=${lp.x} y=${lp.y}")
                     }
                 }
             }

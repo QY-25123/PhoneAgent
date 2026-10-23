@@ -15,7 +15,7 @@ class ShoppingTest {
         val r = clarifier(clarifyJson(type = "shopping", product = "USB-C 数据线")).clarify(user("买个 USB-C 数据线")) as ClarifyOutcome.ReadyShopping
         assertThat(r.task).isEqualTo(ShoppingTask("USB-C 数据线", 1, false, null))
         assertThat(r.restatement).contains("提交订单页")
-        assertThat(r.restatement).contains("不会点下单")
+        assertThat(r.restatement).contains("付款由你来")
     }
 
     @Test fun existingCartNeedsNoProduct() = runTest {
