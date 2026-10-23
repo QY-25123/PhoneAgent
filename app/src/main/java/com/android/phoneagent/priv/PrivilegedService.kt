@@ -9,6 +9,7 @@ class PrivilegedService : IPrivileged.Stub() {
     // 构造函数在 UserService 的 main looper 线程执行，ActivityThread 必须在这里初始化
     private val context = FakeContext.create()
     private val display = VirtualDisplayHolder(context)
+    private val input = InputInjector()
 
     override fun destroy() {
         System.exit(0)
@@ -27,11 +28,11 @@ class PrivilegedService : IPrivileged.Stub() {
         p.waitFor()
         if (out.contains("Error")) error(out.trim())
     }
-    override fun tap(displayId: Int, x: Float, y: Float) = throw UnsupportedOperationException("step 5")
+    override fun tap(displayId: Int, x: Float, y: Float) = input.tap(displayId, x, y)
     override fun swipe(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) =
-        throw UnsupportedOperationException("step 5")
+        input.swipe(displayId, x1, y1, x2, y2, durationMs)
 
-    override fun back(displayId: Int) = throw UnsupportedOperationException("step 5")
+    override fun back(displayId: Int) = input.key(displayId, android.view.KeyEvent.KEYCODE_BACK)
     override fun setText(displayId: Int, text: String): Boolean = throw UnsupportedOperationException("step 6")
     override fun dumpTree(displayId: Int): String = throw UnsupportedOperationException("step 6")
     override fun release() {

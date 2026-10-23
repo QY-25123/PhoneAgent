@@ -133,7 +133,7 @@ object Agent {
             val rowPixels = plane.rowStride / plane.pixelStride
             val full = Bitmap.createBitmap(rowPixels, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(plane.buffer)
-            val small = Bitmap.createScaledBitmap(Bitmap.createBitmap(full, 0, 0, img.width, img.height), 270, 600, true)
+            val small = Bitmap.createScaledBitmap(Bitmap.createBitmap(full, 0, 0, img.width, img.height), 540, 1200, true)
             full.recycle()
             preview = small.asImageBitmap()
         } finally {
