@@ -8,7 +8,7 @@ interface IPrivileged {
 
     int getUid() = 1;
     // 返回 displayId；失败抛异常
-    int createDisplay(in Surface surface, int width, int height, int dpi) = 2;
+    int createDisplay(in Surface surface, int width, int height, int dpi, boolean stealTopFocusDisabled) = 2;
     void launchApp(int displayId, String component) = 3;
     void tap(int displayId, float x, float y) = 4;
     void swipe(int displayId, float x1, float y1, float x2, float y2, long durationMs) = 5;
@@ -30,6 +30,4 @@ interface IPrivileged {
 
     // UserActivityGuard 用：主屏软键盘是否正在显示（用户正在打字）
     boolean isMainImeShown() = 14;
-    // 把 top focused display 切回主屏
-    void restoreMainFocus() = 15;
 }

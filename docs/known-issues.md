@@ -25,13 +25,16 @@
 ## 5. GLOBAL_ACTION_BACK 不能用
 `UiAutomation.performGlobalAction(GLOBAL_ACTION_BACK)` 没有 displayId 参数，作用于 top focused display。主屏是 top focused display 时会对**主屏**执行返回（实测 PhoneAgent 的 MainActivity 被关掉，虚拟屏页面不变）。必须禁用，返回键一律用带 displayId 的 KeyEvent。详见 `docs/ime-experiments.md`。
 
-## 6. UserActivityGuard 的局限
-- **竞态**：守卫在动作开始前检查一次键盘。用户在检查之后、动作执行期间开始打字，动作仍会执行并可能收起键盘。窗口约几十到几百毫秒。
-- **焦点补切**：动作返回后页面切换可能还没发生（新 Activity 要几百毫秒才 resume 并抢焦点），所以立即切一次，再在 500ms、1500ms 后各补一次。页面切换超过 1.5 秒（冷启动大型 App）时，焦点会在补切之后又被抢走，要等下一个动作之后才会再切回。
-- **切回焦点的方法依赖系统实现**：向主屏注入一个孤立的 `KEYCODE_UNKNOWN` UP 事件，靠 PhoneWindowManager 对带 displayId 的按键调用「把该屏移到最前」。只在 Android 14 模拟器上验证过，厂商 ROM 可能不同。`setFocusedRootTask`、`moveTaskToFront`、`focusTopTask`、`moveRootTaskToDisplay` 都试过，没有一个能切回。
-- **键盘检测依赖 HIDE 策略**：用 `dumpsys input_method` 的 `mInputShown` 判断用户是否在打字，前提是虚拟屏的 IME 策略为 HIDE（Agent 创建虚拟屏后会设置），否则虚拟屏里的 App 自己弹出的键盘会被误判为用户在打字，守卫会一直等。
-- **用户长时间打字，agent 会一直等**：目前没有超时。
+## 6. 对 STEAL_TOP_FOCUS_DISABLED 标志的依赖
+用户键盘和输入目标的隔离现在依赖 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED`（Android 14 隐藏常量）。
+- 只在 Android 14 模拟器上验证过。更低版本没有这个常量；厂商 ROM 是否保留、行为是否一致未知。
+- 标志缺失或不生效时的后备方案是 `UserActivityGuard`（打开「用户打字时暂停」开关）。但后备方案不能把焦点切回主屏（试过的 `setFocusedRootTask`、`moveTaskToFront` 等都无效，只有注入孤立的 `KEYCODE_UNKNOWN` UP 有效，已删除），所以动作后键盘可能被收起。
+- 标志是创建虚拟屏时的 flag，不能事后修改。
+
+## 7. UserActivityGuard（安全开关）的局限
+- **竞态**：只在动作开始前检查一次键盘。用户在检查之后、动作执行期间开始打字，动作仍会执行。窗口约几十到几百毫秒。
+- **键盘检测依赖 HIDE 策略**：用 `dumpsys input_method` 的 `mInputShown` 判断，前提是虚拟屏 IME 策略为 HIDE（Agent 创建虚拟屏后会设置），否则虚拟屏里的 App 自己弹出的键盘会被误判成用户在打字。
+- **用户长时间打字，agent 会一直等**：没有超时。
 
 ## 以后的优化方向（暂不做）
-- **方案 2：阻止虚拟屏抢 top focus**。`ActivityOptions.setAvoidMoveToFront()` 只覆盖「启动」，不覆盖页面内跳转和触摸。更值得试的是 Android 14 framework 里存在的 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED`（创建虚拟屏时的 flag，需要 `OWN_FOCUS`），从源头禁止虚拟屏拿走 top focus，如果有效，守卫的「动作后切回焦点」和「用户打字时暂停」都可以大幅简化。**只确认了常量存在，没有验证效果。**
-- **方案 4：把 agent 放到独立的 Android 用户/会话**，输入法实例和焦点彻底隔离。改动大，要重新评估 Shizuku、前台服务、跨用户通信。
+- **方案 4：把 agent 放到独立的 Android 用户/会话**，输入法实例和焦点彻底隔离。改动大，要重新评估 Shizuku、前台服务、跨用户通信。若标志在真机/厂商 ROM 上不可用，才需要考虑。

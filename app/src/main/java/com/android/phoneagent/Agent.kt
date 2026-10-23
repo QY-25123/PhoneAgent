@@ -64,6 +64,7 @@ object Agent {
     fun init(context: Context) {
         if (this::appContext.isInitialized) return
         appContext = context.applicationContext
+        pauseWhileTyping = appContext.getSharedPreferences("agent", Context.MODE_PRIVATE).getBoolean("pause_while_typing", false)
         Shizuku.addBinderReceivedListenerSticky { report("Shizuku binder 已到达"); }
         Shizuku.addBinderDeadListener { priv = null; report("Shizuku binder 已死") }
         Shizuku.addRequestPermissionResultListener { _, result ->
@@ -95,10 +96,26 @@ object Agent {
         private set
 
     @Volatile private var cancelled = false
+
+    /**
+     * 创建虚拟屏时加 VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED：虚拟屏上的动作不再切走 top focused display。
+     * 默认开；只有做对照实验时才关（debug 广播 config）。
+     */
+    @Volatile var stealTopFocusDisabled = true
+
+    /** 「用户打字时暂停 agent」安全开关，默认关闭，持久化在 SharedPreferences。 */
+    var pauseWhileTyping by mutableStateOf(false)
+        private set
+
+    fun updatePauseWhileTyping(on: Boolean) {
+        pauseWhileTyping = on
+        appContext.getSharedPreferences("agent", Context.MODE_PRIVATE).edit().putBoolean("pause_while_typing", on).apply()
+    }
     private val guard = UserActivityGuard(
         priv = { priv },
         isCancelled = { cancelled },
         onWaiting = { waitingForUser = it; if (it) status = "等待用户输入完成" },
+        enabled = { pauseWhileTyping },
     )
 
     /** 在后台线程执行特权调用，结果/异常写入 status 与 logcat。[guarded] 的动作会被 [UserActivityGuard] 包住。 */
@@ -146,7 +163,7 @@ object Agent {
         r.setOnImageAvailableListener({ onFrame(it) }, Handler(thread.looper))
         readerThread = thread
         reader = r
-        displayId = p.createDisplay(r.surface, WIDTH, HEIGHT, DPI)
+        displayId = p.createDisplay(r.surface, WIDTH, HEIGHT, DPI, stealTopFocusDisabled)
         // 虚拟屏上的窗口不许请求输入法，否则 App（如设置搜索页）会在用户的屏幕上弹出键盘。
         // 策略按 uniqueId 缓存，每次创建后都显式设置。
         p.setImePolicy(displayId, IME_POLICY_HIDE)

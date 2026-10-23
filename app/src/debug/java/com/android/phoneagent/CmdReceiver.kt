@@ -21,6 +21,10 @@ class CmdReceiver : BroadcastReceiver() {
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))
             "gback" -> Agent.globalBack()
+            "config" -> {
+                Agent.stealTopFocusDisabled = intent.getBooleanExtra("steal", Agent.stealTopFocusDisabled)
+                Agent.updatePauseWhileTyping(intent.getBooleanExtra("pause", Agent.pauseWhileTyping))
+            }
             "stop" -> Agent.stop()
             "maintext" -> android.util.Log.i("PA", "MAIN_FIELD=" + Agent.mainFieldText)
         }

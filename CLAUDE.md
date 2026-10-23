@@ -32,4 +32,4 @@ Kotlin + Jetpack Compose + Shizuku（api / provider）。参考 scrcpy server �
 - 构建需要 Android Studio 自带 JBR：`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew installDebug`
 - 特权代码在 `priv/`（UserService，shell uid）；`UiAutomationHelper` 是可复用的界面树/输入模块。
 - 回归脚本在 `scripts/`：`regress.sh`（总入口）= `guard_test.sh` + `back_test.sh` + `ime_test.sh`。改动 `priv/`、`Agent`、`UserActivityGuard` 后都要跑。结论和约束见 `docs/spike-summary.md`、`docs/known-issues.md`。
-- 虚拟屏上的所有动作必须经过 `UserActivityGuard`（`Agent.call(guarded = true)`）；返回键必须用带 displayId 的 KeyEvent，禁止 `GLOBAL_ACTION_BACK`。
+- 虚拟屏必须带 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED` 创建（否则用户的键盘会被收起/抢走）；虚拟屏上的动作经过 `UserActivityGuard`（「用户打字时暂停」安全开关，默认关闭）；返回键必须用带 displayId 的 KeyEvent，禁止 `GLOBAL_ACTION_BACK`。

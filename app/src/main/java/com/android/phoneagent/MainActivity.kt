@@ -19,12 +19,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.android.phoneagent.ui.theme.PhoneAgentTheme
@@ -48,6 +50,10 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text("状态：${Agent.status}")
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Switch(Agent.pauseWhileTyping, { Agent.updatePauseWhileTyping(it) })
+                            Text("用户打字时暂停 agent（安全开关）")
+                        }
                         if (Agent.waitingForUser) {
                             Text("等待用户输入完成", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
                         }

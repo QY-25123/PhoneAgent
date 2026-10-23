@@ -53,6 +53,7 @@ adb shell svc power stayon true
 adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 pa stop; sleep 1; adb shell am force-stop $PKG; sleep 1
 adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+pa config --ez pause true $CFG   # 安全开关默认关，这里测它所以打开；CFG 可追加其他实验开关
 pa connect; sleep 4; pa display; sleep 3; pa launch; sleep 4
 VD=$(vdisplay)
 read -r T0 CX CY < <(main_field)

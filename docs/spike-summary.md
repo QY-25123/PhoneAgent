@@ -5,7 +5,7 @@
 - **验证环境**：Android Studio 模拟器 Pixel 8，Android 14（API 34，arm64），带 Google Play；Shizuku 13.1.5，通过 adb 启动。
 - **技术栈**：Kotlin + Jetpack Compose + Shizuku（api/provider），无 hiddenapibypass。
 - **代码位置**：`app/src/main/java/com/android/phoneagent/`（`priv/` 是运行在 shell 进程里的特权代码）；回归脚本 `scripts/`；实验记录 `docs/ime-experiments.md`；已知问题 `docs/known-issues.md`。
-- **总体结论**：**可行，但有一条硬约束：用户在主屏打字时，agent 必须暂停。** 其余能力全部验证可用。
+- **总体结论**：**可行，全部能力验证可用。** 用户键盘/输入目标的隔离靠创建虚拟屏时的 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED` 标志解决，不需要让 agent 避让用户（避让保留为默认关闭的安全开关）。
 
 ---
 
@@ -21,7 +21,7 @@
 | 6 | 向虚拟屏输入框写中文，不占用用户输入法 | 可用 | UiAutomation + `ACTION_SET_TEXT`，不经过输入法 |
 | 7 | 前台服务保活 | 可用 | 切到后台 20 秒后仍正常工作 |
 | 8 | 停止并释放，无残留 | 可用 | 需要先关掉虚拟屏上的任务再释放 |
-| 9 | 用户在主屏打字时，agent 不影响用户的键盘和输入目标 | **有条件可用** | 靠 `UserActivityGuard`：用户打字时 agent 暂停；代价是 agent 会被用户打断 |
+| 9 | 用户在主屏打字时，agent 不影响用户的键盘和输入目标 | 可用 | 虚拟屏加 `STEAL_TOP_FOCUS_DISABLED` 标志；「用户打字时暂停」作为默认关闭的安全开关保留 |
 
 ---
 
@@ -67,12 +67,15 @@
 - 停止顺序：取消正在等待的动作 → UiAutomation 断开 → **关掉虚拟屏上所有任务**（`IActivityTaskManager.removeTask`）→ 释放 display → 把焦点切回主屏 → 关闭 ImageReader → 停前台服务。
 - 验证：停止后 `dumpsys display` 只剩 display 0，`dumpsys activity` 只剩 display 0，`dumpsys accessibility` 里的 `Ui Automation` 条目消失，服务消失。
 
-### 2.8 用户活动守卫（UserActivityGuard）
-对虚拟屏的每个动作（启动、点击、滑动、写入、返回、语义点击/滚动）都经过它：
-1. **动作前**：`dumpsys input_method` 的 `mInputShown` 为 true（主屏键盘正在显示）就暂停，界面显示「等待用户输入完成」；键盘收起并**持续 2 秒**后继续。每 300ms 检查一次，一次检查约 45ms。
-2. **动作后**：用户没在打字，就把 top focused display 切回主屏：向主屏注入一个孤立的 `KEYCODE_UNKNOWN` UP 事件。因为页面切换有延迟，立即切一次，再在 500ms、1500ms 后各补切一次，每次切之前都重新确认用户没在打字。
-3. 停止时会取消正在等待的动作，不会卡死。
-4. 只读查询（dump 界面树）走单独的线程，不会被暂停的动作堵住。
+### 2.8 键盘/输入目标隔离：STEAL_TOP_FOCUS_DISABLED 标志
+- 创建虚拟屏时加 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED`（Android 14 隐藏常量 `0x10000`，反射读取，要求同时有 `OWN_FOCUS`，shell 可用）。虚拟屏上启动 Activity、触摸、页面跳转都不再切走 top focused display，用户的键盘不被收起，输入也不被抢。
+- 验证：守卫全关时，`ime_test` 6/6 步通过（键盘仍显示、焦点窗口和输入连接不变、top display 始终为 0、主屏仍能打字）；去掉标志的对照组全部失败。动作确实被执行（虚拟屏里写入了中文）。详见 `docs/ime-experiments.md`。
+- 配合虚拟屏 IME 策略 `HIDE`（见 2.2），虚拟屏里的 App 不会在用户的屏幕上弹键盘。
+
+### 2.9 安全开关：用户打字时暂停（UserActivityGuard，默认关闭）
+主界面有开关，状态持久化。开启后，对虚拟屏的每个动作（启动、点击、滑动、写入、返回、语义点击/滚动）执行前检查主屏键盘是否显示（`dumpsys input_method` 的 `mInputShown`，约 45ms，每 300ms 一次）：显示就暂停，界面显示「等待用户输入完成」；键盘收起并**持续 2 秒**后继续。停止时会取消正在等待的动作。只读查询（dump 界面树）走单独的线程，不会被暂停的动作堵住。
+
+早先版本的「动作后注入 `KEYCODE_UNKNOWN` UP 把焦点切回主屏」和「500ms/1500ms 补切」已删除（有标志后不需要）。
 
 ---
 
@@ -84,7 +87,10 @@
 | `scripts/guard_test.sh` b | 键盘收起后 2315ms 动作自动继续（要求 ≥2000ms） | PASS |
 | `scripts/guard_test.sh` c | 动作完成后 top display=0；此时在主屏发不带 displayId 的返回键，作用在主屏（PhoneAgent 被关掉），虚拟屏上的搜索页保持不变 | PASS |
 | `scripts/back_test.sh` | 带 displayId 的 KeyEvent 在两种场景下都只作用于虚拟屏 | PASS |
-| `scripts/ime_test.sh` | 键盘弹出时对虚拟屏下达「点搜索框、写中文、返回、再进搜索页、返回」，每步后键盘仍显示、焦点窗口和输入连接不变、主屏仍能打字 | PASS |
+| `scripts/ime_test.sh` | 默认配置（标志开、暂停关）：键盘弹出时对虚拟屏下达「点搜索框、写中文、返回、再进搜索页、返回」，动作真实执行；每步后键盘仍显示、焦点窗口和输入连接不变、top display 为 0、主屏仍能打字 | PASS（6/6） |
+| `CFG='--ez steal false' scripts/ime_test.sh` | 对照：去掉标志 | FAIL（键盘被收起、top display 被切走），证明标志在起作用 |
+
+`guard_test.sh` 测的是安全开关（脚本里会打开它）；`ime_test.sh` 测的是不依赖安全开关的隔离。
 
 `scripts/regress.sh` 一次跑完以上全部。
 
@@ -92,14 +98,14 @@
 
 ## 4. 已知限制与约束（写需求时必须考虑）
 
-### 4.1 用户打字时 agent 必须暂停（硬约束）
-- **根因**：Android 只有一个输入法实例，只有一个「top focused display」。虚拟屏上任何 Activity 被启动或获得焦点（`am start --display`、触摸、语义点击引起的页面跳转都会），top focused display 就变成虚拟屏，主屏窗口失去焦点，系统随之收起用户的键盘，或把输入连接交给虚拟屏里的 App。`OWN_FOCUS` 只隔离窗口焦点，不隔离这件事。
-- 实测：默认策略下用户在主屏键盘上打的字会进入虚拟屏的搜索框；设为 HIDE 策略后连接不会被抢，但键盘会被收起。**两者只能二选一，所以只能让 agent 让位。**
-- 产品含义：用户打字期间 agent 暂停，没有超时；用户打字很多时 agent 会一直等。需求里要定义「等多久后提示用户」之类的策略。
-- 详细实验数据见 `docs/ime-experiments.md`。
+### 4.1 键盘/输入目标隔离依赖 STEAL_TOP_FOCUS_DISABLED 标志
+- **问题根因**：Android 只有一个输入法实例，只有一个「top focused display」。虚拟屏上任何 Activity 被启动或获得焦点（`am start --display`、触摸、语义点击引起的页面跳转），top focused display 就变成虚拟屏，主屏窗口失去焦点，系统随之收起用户的键盘，或把输入连接交给虚拟屏里的 App。`OWN_FOCUS` 只隔离窗口焦点，不隔离这件事；IME 策略 `HIDE` 只能避免连接被抢，不能避免键盘被收起（两者只能二选一）。
+- **解决**：创建虚拟屏时加 `STEAL_TOP_FOCUS_DISABLED` 标志，从源头阻止（见 2.8）。**不需要 agent 避让用户**。
+- **限制**：这是 Android 14 的隐藏常量，只在模拟器上验证；低版本没有，厂商 ROM 未知。标志不可用时，后备方案是打开「用户打字时暂停」开关，但那样不能保证键盘不被收起（见 `docs/known-issues.md` 第 6、7 条）。
+- 实验数据见 `docs/ime-experiments.md`。
 
 ### 4.2 返回键必须用带 displayId 的 KeyEvent，禁用 GLOBAL_ACTION_BACK
-`UiAutomation.performGlobalAction(GLOBAL_ACTION_BACK)` 没有 displayId 参数，作用于 top focused display。守卫会把焦点切回主屏，所以它**一定**会对主屏执行返回，关掉用户正在用的 App。实测 PhoneAgent 的 MainActivity 被关掉、虚拟屏页面不变。
+`UiAutomation.performGlobalAction(GLOBAL_ACTION_BACK)` 没有 displayId 参数，作用于 top focused display。有了标志，top focused display 始终是主屏，所以它**一定**会对主屏执行返回，关掉用户正在用的 App。实测 PhoneAgent 的 MainActivity 被关掉、虚拟屏页面不变（`back_test.sh`）。
 
 ### 4.3 同一个 App 不能两边同时使用
 虚拟屏正在运行某个 App 时，用户在主屏打开同一个 App：
@@ -109,10 +115,11 @@
 产品含义：agent 操作某个 App 期间，用户无法同时使用它；agent 需要检测 task 被移走并处理。
 
 ### 4.4 语义操作不能规避焦点问题
-ACTION_CLICK、ACTION_SCROLL 引起的页面跳转同样会切走 top focused display，和触摸没有区别。后续 agent 的动作可以用语义操作为主（比触摸更不依赖坐标），但守卫仍然必须保留。`ACTION_SET_TEXT` 本身不改变输入法状态，但要求目标输入框已聚焦。
+没有标志时，ACTION_CLICK、ACTION_SCROLL 引起的页面跳转同样会切走 top focused display，和触摸没有区别。有标志后两者都不再影响主屏。后续 agent 的动作可以用语义操作为主（比触摸更不依赖坐标），触摸作兜底。`ACTION_SET_TEXT` 本身不改变输入法状态，但要求目标输入框已聚焦。
 
 ### 4.5 对系统实现的依赖
-- 「切回主屏焦点」依赖 PhoneWindowManager 对带 displayId 的按键的处理，只在 Android 14 模拟器上验证；`setFocusedRootTask`、`moveTaskToFront`、`focusTopTask`、`moveRootTaskToDisplay` 都试过，不能用。
+- `STEAL_TOP_FOCUS_DISABLED` 标志只在 Android 14 模拟器上验证（见 4.1）。
+- （历史）曾用「注入孤立的 `KEYCODE_UNKNOWN` UP 切回主屏焦点」，依赖 PhoneWindowManager 的实现，已删除；`setFocusedRootTask`、`moveTaskToFront`、`focusTopTask`、`moveRootTaskToDisplay` 都试过，不能切回。
 - 键盘检测依赖虚拟屏 IME 策略为 HIDE。
 - 大量隐藏 API 靠反射调用（`DisplayManager` 构造函数、`InputEvent.setDisplayId`、`UiAutomation` 构造函数和 `connect`、`IWindowManager`、`IActivityTaskManager`）。API 变化会失败，需要按系统版本验证。
 
@@ -138,7 +145,8 @@ ACTION_CLICK、ACTION_SCROLL 引起的页面跳转同样会切走 top focused di
 - **Shizuku 之外的权限路径**：没有 Shizuku（无 root、无无线调试）时怎么办。
 - **多个虚拟屏、多个 agent 并行**。
 - **性能**：预览只验证了每秒一帧；动作延迟（点击后页面稳定需要多久）没有系统测量。
-- **UserActivityGuard 的竞态窗口**（用户在检查之后开始打字）的实际发生概率。
+- **`STEAL_TOP_FOCUS_DISABLED` 标志在真机、厂商 ROM、其他 Android 版本上是否有效**（最重要）。
+- **安全开关（用户打字时暂停）的竞态窗口**（用户在检查之后开始打字）的实际发生概率。
 - `UserService` 异常退出后的自动恢复。
 - **后台限制**：App 被系统杀掉、省电模式、Android 15+ 的前台服务限制。
 
@@ -146,7 +154,7 @@ ACTION_CLICK、ACTION_SCROLL 引起的页面跳转同样会切走 top focused di
 
 ## 6. 对需求文档的建议输入
 
-1. 把「用户打字时 agent 暂停」定义为产品行为，并设计对应的 UI（现在是一行文字「等待用户输入完成」）和超时策略。
-2. 产品文案要明确「agent 工作期间，用户不能同时使用 agent 正在操作的同一个 App」。
-3. 把「真机/厂商 ROM 兼容性」作为第一优先级的风险，在写完需求后尽快用真机复验第 1～9 项。
-4. 方案 2（阻止虚拟屏抢 top focus，重点验证 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED`）可能把第 4.1 条硬约束大幅放宽，值得作为早期的技术验证项。
+1. 「agent 在虚拟屏工作，用户同时正常使用手机」在 Android 14 模拟器上成立，键盘和输入目标不受影响，不需要让 agent 避让用户。
+2. 产品文案要明确「agent 操作某个 App 期间，用户无法同时使用它」（4.3）。
+3. 把「真机/厂商 ROM/其他 Android 版本上 `STEAL_TOP_FOCUS_DISABLED` 是否有效」作为第一优先级的风险，尽快用真机复验第 1～9 项。标志不可用时才需要启用「用户打字时暂停」后备方案，并重新评估产品形态。
+4. 「用户打字时暂停」目前是默认关闭的开关，如果产品需要，要定义等待多久后提示用户的超时策略。

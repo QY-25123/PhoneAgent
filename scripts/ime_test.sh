@@ -7,8 +7,8 @@
 #   -l  只测“键盘弹出时在虚拟屏 am start --display 启动应用”这一个动作（不注入任何输入）
 #   -m  操作方式：touch=模拟触摸(默认)  semantic=无障碍 ACTION_CLICK
 #   -b  返回键方式：key=带 displayId 的 KeyEvent(默认)  global=GLOBAL_ACTION_BACK
-# 注意：动作现在经过 UserActivityGuard，键盘弹出期间会被暂停，所以默认配置下“动作”其实没有被执行，
-#       本脚本验证的是“不管下什么动作，用户的输入目标都不变”。要复现输入法被抢走的原始现象见 docs/ime-experiments.md。
+# 默认配置：虚拟屏带 STEAL_TOP_FOCUS_DISABLED 标志，「用户打字时暂停」关闭，动作真实执行。
+# 对照实验（去掉标志，应该失败，用来证明标志在起作用）：CFG='--ez steal false' scripts/ime_test.sh
 # 前提：debug 版已安装、Shizuku 已运行并已授权、模拟器已显示软键盘(show_ime_with_hard_keyboard=1)。
 # 每个动作后检查（全部满足才算 PASS）:
 #   shown   主屏 mInputShown 仍为 true
@@ -97,6 +97,7 @@ adb shell pm grant $PKG android.permission.POST_NOTIFICATIONS 2>/dev/null
 pa stop; sleep 1
 adb shell am force-stop $PKG; sleep 1
 adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+pa config --ez pause false $CFG   # 默认配置：只靠 STEAL_TOP_FOCUS_DISABLED 标志，不暂停。对照实验：CFG='--ez steal false'
 pa connect; sleep 4
 pa display; sleep 3
 if [ -n "$POLICY" ]; then

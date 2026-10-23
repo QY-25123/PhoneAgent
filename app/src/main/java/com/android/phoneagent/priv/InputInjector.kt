@@ -59,20 +59,6 @@ class InputInjector {
         }
     }
 
-    /**
-     * 把 top focused display 切到 displayId。
-     * 向该屏注入一个孤立的 KEYCODE_UNKNOWN UP（没有对应的 DOWN）：PhoneWindowManager 在入队前看到带 displayId
-     * 的按键就会把该屏移到最前，之后 InputDispatcher 因为 UP 没有匹配的 DOWN 把它丢弃，用户的 App 收不到任何按键。
-     * 实测 setFocusedRootTask / moveTaskToFront / focusTopTask 都不能切回主屏，只有这个有效。
-     */
-    fun focusDisplay(displayId: Int) {
-        val now = SystemClock.uptimeMillis()
-        send(
-            KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_UNKNOWN, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD),
-            displayId,
-        )
-    }
-
     private companion object {
         const val INJECT_ASYNC = 0
     }

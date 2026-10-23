@@ -19,8 +19,8 @@ class PrivilegedService : IPrivileged.Stub() {
 
     override fun getUid(): Int = Process.myUid()
 
-    override fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int): Int =
-        display.create(surface, width, height, dpi)
+    override fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int, stealTopFocusDisabled: Boolean): Int =
+        display.create(surface, width, height, dpi, stealTopFocusDisabled)
 
     // 原型阶段直接用 am start --display；--activity-clear-task 避免复用主屏上已有的 task
     override fun launchApp(displayId: Int, component: String) {
@@ -51,12 +51,9 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun globalBack() = ui.globalBack()
 
     override fun isMainImeShown() = mainScreen.isImeShown()
-    override fun restoreMainFocus() = input.focusDisplay(0)
 
     override fun release() {
         ui.close()
         display.release()
-        // 销毁 display 后 top focused display 可能还指着它，必须切回主屏
-        input.focusDisplay(0)
     }
 }

@@ -9,14 +9,23 @@ class VirtualDisplayHolder(private val context: FakeContext) {
     private var display: VirtualDisplay? = null
     private val tasks = DisplayTasks()
 
-    fun create(surface: Surface, width: Int, height: Int, dpi: Int): Int {
+    fun create(surface: Surface, width: Int, height: Int, dpi: Int, stealTopFocusDisabled: Boolean): Int {
         release()
         val dm = DisplayManager::class.java.getDeclaredConstructor(android.content.Context::class.java)
             .apply { isAccessible = true }.newInstance(context)
-        val d = dm.createVirtualDisplay("PhoneAgent", width, height, dpi, surface, FLAGS)
+        val d = dm.createVirtualDisplay("PhoneAgent", width, height, dpi, surface, if (stealTopFocusDisabled) FLAGS or stealFlag() else FLAGS)
             ?: error("createVirtualDisplay 返回 null")
         display = d
         return d.display.displayId
+    }
+
+    /** 隐藏常量 VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED（Android 14），需要 OWN_FOCUS。反射读取，读不到按 1 shl 16。 */
+    private fun stealFlag(): Int {
+        val v = runCatching {
+            DisplayManager::class.java.getField("VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED").getInt(null)
+        }.getOrDefault(1 shl 16)
+        android.util.Log.i("PA", "STEAL_TOP_FOCUS_DISABLED flag=0x${Integer.toHexString(v)}")
+        return v
     }
 
     fun release() {
