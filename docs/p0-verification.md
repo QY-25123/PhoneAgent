@@ -120,3 +120,50 @@
 
 ### 实现中顺带修的问题
 预览原先按「距离上一帧 ≥1 秒才处理」丢帧，画面静止前的最后一帧会被丢掉，预览停在旧画面。已改成延迟补取（`Agent.onFrame` / `processLatest`）。
+
+---
+
+## P0-1 UV-5 三个目标 App 在虚拟屏运行：Google 日历、Gmail 通过（Amazon 见下一节）
+
+T2 已由 Telegram 改为 Gmail（PRD v0.4），Telegram 相关验证全部取消。以下是手动逐步探索加脚本（`scripts/p0/`）得到的结果。截图、界面树含账号邮箱和邮件内容，**未提交**。
+
+### Google 日历
+| 检查 | 结果 |
+|---|---|
+| 在虚拟屏上启动并正常渲染 | ✅ |
+| 界面树可读：日程视图里每个事项是 `View` 节点，`contentDescription` 形如「Halloween, All day: 」；新建事项页里日期、时间、标题都有文字 | ✅ |
+| `ACTION_SET_TEXT` 写中文+英文标题（「P0测试事项 Alice review」） | ✅，标题框读回来一致 |
+| 取消草稿：「Cancel」→「Discard this event?」→「Discard」 | ✅（未保存任何事项） |
+
+### Gmail（T2 的目标 App）
+| 检查 | 结果 |
+|---|---|
+| 在虚拟屏上启动、首次引导（欢迎页、账号设置页、Meet 引导） | ✅，都能用界面树文字点掉 |
+| **首次弹出系统通知权限对话框**（`com.android.permissioncontroller`，也出现在虚拟屏上） | 按 PRD 6.7.3「不授予任何权限」点「Don't allow」。注意：**每次启动 Gmail 都会再弹一次**（直到拒绝两次），agent 需要稳定处理这个弹窗 |
+| 新建邮件：收件人、主题、正文各自的节点 | 收件人：`EditText`（在 `peoplekit_autocomplete_chip_group` 里，没有 id）；主题：`id=subject`；**正文是 WebView**（`wc_body`），里面的 contenteditable 节点是 `EditText` |
+| 写收件人：`ACTION_SET_TEXT` 写入邮箱地址 | ✅ 文字写进去了，但**不会自动变成芯片**：界面出现联系人建议行「Add recipient / qijie_jerry@163.com」（`peoplekit_listview_contact_method`，界面树可读），点这一行才生成芯片。生成后界面树里有 `desc="Recipients: qijie_jerry@163.com,"` 和 `peoplekit_chip` 按钮 |
+| 联系人建议（只给名字时的查找）| 建议行在界面树里可读（上面那一行就是建议）；只给名字的情形（多个匹配/找不到）预期同样靠这个列表，**未单独测** |
+| 写主题、写正文（WebView） | ✅ `ACTION_SET_TEXT` 在 WebView 内的可编辑节点上生效，中文英文混排，界面树读回一致 |
+| 发送按钮 | `id=send`，`desc="Send"`，位置 [827,20,954,146]，写完内容后变为可用 |
+| 点发送后的反馈 | 收件箱里出现 snackbar：`id=snackbar_main_content`，文字「Sent」，操作按钮 `action_text="Undo"`，界面树可读。**撤销提示持续时间超过 13 秒**（默认的撤销窗口是 5 秒，但 snackbar 存在得更久），所以「撤销窗口结束」要用固定等待而不是「等 snackbar 消失」 |
+| 完成验证：「已发送」文件夹 | ✅ 打开抽屉 → Sent，第一封就是刚发的：`senders="To: qijie_jerry"`（**只显示收件人的名字部分，不是完整地址**）、`subject`、`snippet`、`date`。**要拿到完整地址，必须打开这封邮件，点「to qijie_jerry」展开，`to_details` 里是 `qijie_jerry@163.com`** |
+| 丢弃草稿 | ✅ 撰写界面「More options」→「Discard」，**没有确认对话框**，草稿箱变为「Nothing in Drafts」。草稿详情页（从草稿箱点进去）的「Discard drafts」按钮有确认对话框（OK/Cancel） |
+| 草稿自动保存 | ⚠ 撰写到一半 App 被杀掉（验证中重装 App 导致），Gmail 自动保存了一份草稿（收件人写在了正文里的那次错误输入），草稿箱出现 1 份。**这印证了 T2-R9：任务开始/重试前必须检查草稿箱，并只处理自己创建的草稿** |
+
+### Gmail 发送按钮硬拦截（FR-SAFE-12 原型）：通过
+`SafetyGuard` 新增 Gmail 发送按钮识别（包名 `com.google.android.gm` 且 `id` 以 `:id/send` 结尾，或描述为 Send/发送）。默认一律拦截；`armGmailSend(收件人)` 只有在草稿里确实有该收件人时才布防 120 秒，只放行一次。验证期间**测试邮件只能发给 `qijie_jerry@163.com`**，布防入口里写死了这个白名单。
+| 检查 | 结果 |
+|---|---|
+| 未布防，按文案点「Send」 | ✅ `BLOCKED 命中 Gmail 发送按钮` |
+| 未布防，按坐标点击发送按钮区域（890,83） | ✅ 被拦截 |
+| 未布防，语义点击（`ACTION_CLICK`） | ✅ 被拦截 |
+| 布防后点击一次 | ✅ 放行，邮件发出（只发了一封，收件人 qijie_jerry@163.com） |
+| 放行用完后再点发送（新草稿，收件人相同） | ✅ 被拦截（一次性生效） |
+
+**原型的不足（实现 T2 时要补）**：布防只绑定了收件人，没有绑定主题和正文的内容哈希、也没有令牌过期之外的其他失效条件；PRD T2-R7 要求「内容一致才放行」，需要在正式实现里补上。
+
+### 本次验证发现的、需要写进 PRD 的点
+1. **「向当前聚焦的输入框写文字」不可靠**：Gmail 撰写界面里收件人框和 WebView 正文**都**显示 `focused`，我的实现先写到了正文里。动作必须能**指定目标节点**（按界面树里的节点/坐标），PRD 6.2 的「输入文字」要改。
+2. 收件人需要**两步**：写入文字 + 点击联系人建议行，才会生成芯片；验证要读 `Recipients:` 描述。
+3. 「已发送」列表里收件人只有名字，完整地址需要**打开邮件并展开**；完成验证因此至少多 3 步（打开邮件、展开、读取），要计入步数预算。
+4. 每次启动 Gmail 都会弹系统通知权限对话框。
