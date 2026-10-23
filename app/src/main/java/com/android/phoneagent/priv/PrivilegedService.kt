@@ -53,7 +53,7 @@ class PrivilegedService : IPrivileged.Stub() {
     }
 
     override fun swipe(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
-        ui.blockReason(displayId, x1.toInt(), y1.toInt())?.takeIf { !it.startsWith("页面级") }?.let { throw SecurityException("BLOCKED $it") }
+        ui.blockReason(displayId, x1.toInt(), y1.toInt(), consume = false)?.takeIf { !it.startsWith("页面级") }?.let { throw SecurityException("BLOCKED $it") }
         input.swipe(displayId, x1, y1, x2, y2, durationMs)
     }
 
@@ -81,6 +81,11 @@ class PrivilegedService : IPrivileged.Stub() {
         return old
     }
 
+    override fun setTextAt(displayId: Int, x: Float, y: Float, text: String): Boolean {
+        guardPoint(displayId, null, null)
+        return ui.setTextAt(displayId, x.toInt(), y.toInt(), text)
+    }
+
     override fun clickAt(displayId: Int, x: Float, y: Float): Boolean {
         guardPoint(displayId, x, y)
         return ui.clickAt(displayId, x.toInt(), y.toInt())
@@ -89,6 +94,7 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun globalBack() = ui.globalBack()
 
     override fun isMainImeShown() = mainScreen.isImeShown()
+    override fun armGmailSend(displayId: Int, recipient: String): Boolean = ui.armGmailSend(displayId, recipient)
     override fun listTasks(displayId: Int): String = tasks.list(displayId)
     override fun moveTaskToDisplay(taskId: Int, displayId: Int) = tasks.moveToDisplay(taskId, displayId)
 

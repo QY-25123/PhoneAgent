@@ -34,6 +34,12 @@ interface IPrivileged {
     // 按文案找控件并点击（touch=true 用触摸，否则 ACTION_CLICK）。命中硬拦截抛 SecurityException。返回描述字符串或 NOT_FOUND
     String clickText(int displayId, String text, boolean touch) = 16;
 
+    // 向坐标处的可编辑节点写文字（按节点定位，不依赖「当前聚焦」）
+    boolean setTextAt(int displayId, float x, float y, String text) = 20;
+
+    // 测试用：草稿里有该收件人才布防，只对这一封放行一次 Gmail 发送点击（FR-SAFE-12 原型）
+    boolean armGmailSend(int displayId, String recipient) = 19;
+
     // 某块屏幕上的根任务列表（UV-3 冲突检测 / UV-2 交接用）
     String listTasks(int displayId) = 17;
     // 把根任务移到另一块屏幕

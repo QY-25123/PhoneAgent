@@ -73,6 +73,16 @@ class UiAutomationHelper {
         return false
     }
 
+    /** 对坐标处最深的可编辑节点写文字（ACTION_SET_TEXT）。「当前聚焦的输入框」不可靠：Gmail 撰写界面里收件人框和 WebView 正文都显示 focused。 */
+    fun setTextAt(displayId: Int, x: Int, y: Int, text: String): Boolean {
+        for (root in windowRoots(displayId).asReversed()) {
+            val node = deepestAt(root, x, y) { it.isEditable } ?: continue
+            val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
+            return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        }
+        return false
+    }
+
     /** 对坐标处最深的可点击节点执行 ACTION_CLICK（语义点击，不产生触摸事件）。 */
     fun clickAt(displayId: Int, x: Int, y: Int): Boolean {
         for (root in windowRoots(displayId).asReversed()) {
@@ -117,10 +127,12 @@ class UiAutomationHelper {
     }
 
     /** 硬拦截检查：页面级锁定 + 控件级区域。返回拦截原因，null 表示放行。 */
-    fun blockReason(displayId: Int, x: Int?, y: Int?): String? {
+    fun armGmailSend(displayId: Int, recipient: String): Boolean = SafetyGuard.armGmailSend(windowRoots(displayId), recipient)
+
+    fun blockReason(displayId: Int, x: Int?, y: Int?, consume: Boolean = true): String? {
         val roots = windowRoots(displayId)
         SafetyGuard.pageLock(roots)?.let { return "页面级锁定：当前页面含「$it」，不允许点击或输入" }
-        if (x != null && y != null) SafetyGuard.blockedAt(roots, x, y)?.let { return it }
+        if (x != null && y != null) SafetyGuard.blockedAt(roots, x, y, consume)?.let { return it }
         return null
     }
 

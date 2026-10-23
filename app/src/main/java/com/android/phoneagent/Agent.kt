@@ -198,6 +198,14 @@ object Agent {
         report("界面树已输出到 logcat")
     }
 
+    /** debug：验证期间发测试邮件只能发给这个白名单地址。 */
+    fun armGmailSend(recipient: String) = call("布防发送", executor = readIo) {
+        require(recipient.equals("qijie_jerry@163.com", true)) { "测试邮件只能发给 qijie_jerry@163.com" }
+        report("布防发送 $recipient → ${it.armGmailSend(displayId, recipient)}")
+    }
+
+    fun setTextAt(x: Float, y: Float, text: String) = call("写入文字(按坐标)", guarded = true) { report("写入文字(按坐标) ($x,$y) ${if (it.setTextAt(displayId, x, y, text)) "成功" else "失败(该处没有可编辑节点)"}") }
+
     fun listTasks(display: Int) = call("任务列表", executor = readIo) { Log.i(TAG, "TASKS display=$display\n" + it.listTasks(display)); report("任务列表已输出") }
     fun moveTask(taskId: Int, display: Int) = call("移动任务", executor = readIo) { it.moveTaskToDisplay(taskId, display); report("已移动任务 $taskId → display $display") }
 
