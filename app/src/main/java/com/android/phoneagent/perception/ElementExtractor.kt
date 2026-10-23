@@ -97,9 +97,10 @@ object ElementExtractor {
                         order = found.size,
                         el = UiElement(
                             index = 0, stableId = "", type = typeOf(node),
-                            text = node.text?.takeIf { it.isNotBlank() }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
+                            text = node.text?.takeIf { it.isNotBlank() && !node.showingHint }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
                             desc = node.desc?.takeIf { it.isNotBlank() }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
-                            hint = node.hint?.takeIf { it.isNotBlank() }?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
+                            hint = (node.hint?.takeIf { it.isNotBlank() } ?: node.text?.takeIf { node.showingHint && it.isNotBlank() })
+                                ?.let { truncate(normalizeSpace(it), opts.maxOwnTextChars) },
                             mergedText = merged, resourceId = node.resourceId, className = node.className, bounds = c,
                             actions = actionsOf(node), focused = node.focused,
                             checked = if (node.checkable) node.checked else null,
@@ -110,7 +111,7 @@ object ElementExtractor {
             }
         }
 
-        val deduped = dedupe(found)
+        val deduped = labelEditableByRow(dedupe(found))
         val sorted = deduped.sortedWith(compareBy({ it.bounds.top }, { it.bounds.left }))
         val numbered = StableIds.assign(sorted).mapIndexed { i, e -> e.copy(index = i + 1) }
         val top = windows.lastOrNull { it.type == 1 } ?: windows.lastOrNull()
@@ -137,6 +138,21 @@ object ElementExtractor {
         }
         return byKey.values.toList()
     }
+
+    /**
+     * 没有任何标签的输入框（Gmail 的「收件人」框就是这样），用同一行左边最近的有文字元素当提示：
+     * 垂直方向有重叠、右边缘不超过输入框左边缘、距离最近。
+     */
+    private fun labelEditableByRow(els: List<UiElement>): List<UiElement> = els.map { e ->
+        if (!e.actions.contains(ElementAction.EDIT) || e.hint != null || e.desc != null || e.text != null) return@map e
+        val label = els.asSequence()
+            .filter { o -> o !== e && !o.actions.contains(ElementAction.EDIT) && labelText(o) != null }
+            .filter { o -> o.bounds.right <= e.bounds.left + 10 && o.bounds.top < e.bounds.bottom && o.bounds.bottom > e.bounds.top }
+            .minByOrNull { o -> e.bounds.left - o.bounds.right }
+        if (label == null) e else e.copy(hint = labelText(label))
+    }
+
+    private fun labelText(e: UiElement) = e.text ?: e.desc ?: e.mergedText
 
     private fun isActionable(n: RawNode) = n.clickable || n.longClickable || n.editable || n.scrollable || n.checkable
     private fun hasLabel(n: RawNode) = !n.text.isNullOrBlank() || !n.desc.isNullOrBlank() || (n.editable && !n.hint.isNullOrBlank())

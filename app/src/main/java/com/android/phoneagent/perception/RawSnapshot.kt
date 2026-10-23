@@ -43,6 +43,8 @@ class RawNode(
     val selected: Boolean = false,
     val disabled: Boolean = false,
     val password: Boolean = false,
+    /** [text] 其实是占位提示（输入框还是空的） */
+    val showingHint: Boolean = false,
     val scrollForward: Boolean = false,
     val scrollBackward: Boolean = false,
 )
@@ -95,7 +97,7 @@ class RawSnapshot(
             clickable = n.optBoolean("clk"), longClickable = n.optBoolean("lclk"), editable = n.optBoolean("edit"),
             scrollable = n.optBoolean("scr"), focused = n.optBoolean("foc"), checkable = n.optBoolean("chkable"),
             checked = n.optBoolean("chk"), selected = n.optBoolean("sel"), disabled = n.optBoolean("dis"),
-            password = n.optBoolean("pw"), scrollForward = n.optBoolean("sf"), scrollBackward = n.optBoolean("sb"),
+            password = n.optBoolean("pw"), showingHint = n.optBoolean("sh"), scrollForward = n.optBoolean("sf"), scrollBackward = n.optBoolean("sb"),
         )
 
         private fun JSONArray.toBounds() = Bounds(getInt(0), getInt(1), getInt(2), getInt(3))

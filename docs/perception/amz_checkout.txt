@@ -1,0 +1,36 @@
+App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 33
+[1|cvuv] ImageButton "Back" [click]
+[2|eq1n] Button "CANCEL" (Cancel) [click]
+[3|fya3] WebView [scroll-down] focused
+[4|3zcd] Text "Sample text Sample text Sample text Sample t"
+[5|tqz0] Button "privacy notice" [click]
+[6|z8z6] Text "and"
+[7|fp0y] Button "conditions of use" [click]
+[8|a3ck] Text "."
+[9|k2y3] Button "Place your order" [click]
+[10|ykg6] Text "Items:"
+[11|b2gf] Text "$7.99"
+[12|thht] Text "Shipping & handling:"
+[13|0zsp] Text "$6.99"
+[14|um51] Text "Estimated tax to be collected:"
+[15|11sg] Text "$1.46"
+[16|u6sf] Text "Order total:"
+[17|qs2y] Text "$16.44"
+[18|sx65] Text "Test, enjoy a 7-day trial of Prime for only $0.99!"
+[19|dt3s] Text "Sample text Sample text Sampl"
+[20|89en] Text "Sunday, Oct. 25"
+[21|h29n] Text "Sample text Sample t"
+[22|m2bp] Button "Join Prime" [click]
+[23|a5p7] Checkbox #setOrderingPrefsCheckbox [click]
+[24|028j] Text "Default to this delivery address and payment method."
+[25|wnsu] Button "Paying with Visa 0000 Change payment method" [click]
+[26|3bzt] Button "Use Prime for Young Adults cash back" [click]
+[27|6twg] Text "$5.23 available"
+[28|fm0k] Button "Use a gift card, points, voucher, or promo code" [click]
+[29|hc0v] Text "Delivering to Test User"
+[30|nwgn] Text "1 Sample St, Sampleville, CA, 00000, United States"
+[31|3z4z] Text "Place your order"
+[32|r027] Button "Change delivery address" [click]
+[33|uyrh] Text "Choose your delivery option:"
+
+--- timings: wait=10ms reads=1 read=0ms extract=10ms screenshot=5ms serialize=2ms single-pass=17ms

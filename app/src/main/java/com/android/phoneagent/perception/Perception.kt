@@ -47,7 +47,7 @@ class Perception(
         if (frame != null) {
             secure = ScreenshotAnnotator.isMostlyBlack(frame)
             if (secure) notes.add("截图全黑，可能是安全窗口（禁止截屏）；界面树仍然有效，请以下面的元素列表为准")
-            if (opts.annotate) jpeg = ScreenshotAnnotator.annotate(frame, ext.elements, opts.jpegWidth, opts.jpegQuality).jpeg
+            if (opts.annotate) jpeg = ScreenshotAnnotator.annotate(frame, ext.elements, opts.extract.screenWidth, opts.jpegWidth, opts.jpegQuality).jpeg
         } else if (opts.annotate) {
             notes.add("没有可用的截图")
         }

@@ -4,6 +4,7 @@ import com.android.phoneagent.task.Agent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import kotlinx.coroutines.launch
 
 /** 仅供 adb 自测：am broadcast -a com.android.phoneagent.CMD --es cmd connect */
 class CmdReceiver : BroadcastReceiver() {
@@ -34,6 +35,25 @@ class CmdReceiver : BroadcastReceiver() {
             "perceive" -> Agent.perceiveTo(
                 java.io.File(context.getExternalFilesDir(null), "perceive"),
                 intent.getStringExtra("name") ?: "p${System.currentTimeMillis()}", intent.getBooleanExtra("raw", false), intent.getBooleanExtra("wait", true))
+            "perceivesample" -> {
+                // 离线：对 files/samples/NAME.{snap.json,png} 跑同一条感知管线（不需要连接虚拟屏）
+                val dir = java.io.File(context.getExternalFilesDir(null), "samples")
+                val name = intent.getStringExtra("name") ?: return
+                val pending = goAsync()
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+                    try {
+                        val res = com.android.phoneagent.perception.Perception(SampleSource(dir, name)).perceive(
+                            0, com.android.phoneagent.perception.PerceiveOptions(
+                                waitForStable = false,
+                                extract = com.android.phoneagent.perception.ExtractOptions(),
+                            ))
+                        val out = java.io.File(dir, "out").apply { mkdirs() }
+                        java.io.File(out, "$name.txt").writeText(res.text + "\n--- timings: ${res.timings}\n")
+                        res.state.screenshotJpeg?.let { java.io.File(out, "$name.jpg").writeBytes(it) }
+                        android.util.Log.i("PA", "SAMPLE $name elements=${res.state.elements.size} chars=${res.text.length} ${res.timings}")
+                    } finally { pending.finish() }
+                }
+            }
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))

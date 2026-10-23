@@ -189,6 +189,7 @@ class UiAutomationHelper {
         if (n.isSelected) o.put("sel", true)
         if (!n.isEnabled) o.put("dis", true)
         if (n.isPassword) o.put("pw", true)
+        if (n.isShowingHintText) o.put("sh", true)   // text 其实是占位提示，不是用户输入的内容
         for (a in n.actionList) when (a.id) {
             AccessibilityNodeInfo.ACTION_SCROLL_FORWARD -> o.put("sf", true)
             AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD -> o.put("sb", true)

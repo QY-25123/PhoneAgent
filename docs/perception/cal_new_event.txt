@@ -1,0 +1,33 @@
+App: com.google.android.calendar  标题: Sample t  屏幕: 1080x2400  元素: 30
+[1|8z4j] Button [click]
+[2|rs2v] Button "Collapse event sheet" [click]
+[3|0vu4] ImageButton "Back" [click]
+[4|s5jv] Button "October, Show date picker" [click]
+[5|y6d1] Button "Search" [click]
+[6|3gj7] Button "Jump to Today" [click]
+[7|ubz8] Button "Signed in as Test User test.user@example.com Account and settings." [click]
+[8|jeee] Button "Cancel" [click]
+[9|6fgt] Button "Save" [click]
+[10|3mr3] EditText "Add title" [click,long-click,edit] focused
+[11|p1bq] Text "Friday 23 October 2026, Open Schedule View"
+[12|9sm9] Button "All-day" [click]
+[13|g1uv] Switch [toggle] unchecked
+[14|ycj9] Button "Fri, Oct 23, 2026" (Start date: Fri, Oct 23, 2026) [click]
+[15|cxpq] Button "1:30 PM" (Start time: 1:30 PM) [click]
+[16|s1e6] Text "New event: Today, 1:30 PM – 2:30 PM"
+[17|84rj] Button "Fri, Oct 23, 2026" (End date: Fri, Oct 23, 2026) [click]
+[18|9eye] Button "2:30 PM" (End time: 2:30 PM) [click]
+[19|bgpf] Button "Pacific Daylight Time" [click]
+[20|z6tz] Button "Does not repeat" [click]
+[21|210b] Button "Add people" [click]
+[22|f612] Button "View schedules" [click]
+[23|c3ch] Button "Add video conferencing" [click]
+[24|ts0a] Button "Add location" [click]
+[25|wqj8] Button "Remove notification" [click]
+[26|mapp] Text "30 minutes before"
+[27|z20e] Button "Add notification" [click]
+[28|gpbz] Button "Default color" [click]
+[29|v5u4] EditText "Add description" [click,long-click,edit]
+[30|hp27] Button "Add attachment" [click]
+
+--- timings: wait=10ms reads=1 read=0ms extract=9ms screenshot=5ms serialize=2ms single-pass=16ms

@@ -1,0 +1,33 @@
+App: com.amazon.mShop.android.shopping  标题: Sample text Sam  屏幕: 1080x2400  元素: 30
+[1|eq1n] Button "CANCEL" (Cancel) [click]
+[2|fya3] WebView [scroll-down] focused
+[3|sy8z] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample t"
+[4|age3] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample te"
+[5|b8b6] Text "Without Prime"
+[6|jbfx] Text "With Prime"
+[7|3n4p] Text "Sample text Sample text Sample text Sample text Sample text Sample"
+[8|6yv9] Text "Sample text Sample text Sample text Sample text Sample text Sample"
+[9|9j5u] Text "Sample text Sample text Sample text Sample text Sample text Sample t"
+[10|9gy4] Text "Sample text Sample text"
+[11|w13m] Text "Sample text Sam"
+[12|ms9w] Text "for"
+[13|853u] Text "$9.99"
+[14|u5td] Text "$0"
+[15|w47n] Text "Sample text Sample text Sample text Sample text Sample te"
+[16|tea6] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sampl"
+[17|56f7] Button "Amazon Prime Terms" [click]
+[18|0ttj] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共417字)"
+[19|79y9] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Samp"
+[20|cnfs] Button "this page" [click]
+[21|609f] Text "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sam"
+[22|1c4r] Button "here" [click]
+[23|eur2] Text ")."
+[24|qb0e] Text "Sample text Sample text Sample text S"
+[25|jjgr] Button "here" [click]
+[26|4bdd] Button "Submit" [click]
+[27|dp6y] Text "Select a payment method for Prime"
+[28|x65g] Checkbox #pmts-preference-summary-consent-checkbox [click]
+[29|tv8k] Text "Visa****0000"
+[30|n2w5] Button "No thanks" [click]
+
+--- timings: wait=14ms reads=1 read=0ms extract=14ms screenshot=9ms serialize=3ms single-pass=26ms

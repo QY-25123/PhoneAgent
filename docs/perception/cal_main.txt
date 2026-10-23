@@ -1,0 +1,31 @@
+App: com.google.android.calendar  标题: Sample t  屏幕: 1080x2400  元素: 28
+[1|ra7g] ImageButton "Show Calendar List and Settings drawer" [click]
+[2|s5jv] Button "October, Show date picker" [click]
+[3|y6d1] Button "Search" [click]
+[4|3gj7] Button "Jump to Today" [click]
+[5|ubz8] Button "Signed in as Test User test.user@example.com Account and settings." [click]
+[6|xyc9] Text "Friday 23 October 2026, Open Day View"
+[7|y6vc] Text "Nothing planned. Tap to create."
+[8|g3vg] Text "Oct 25 – 31"
+[9|exdm] Text "Saturday 31 October 2026, Open Day View"
+[10|c05g] Text "Halloween, All day:"
+[11|j2dq] Text "November 2026"
+[12|1zvp] Text "Nov 1 – 7"
+[13|tm26] Text "Sunday 01 November 2026, Open Day View"
+[14|kud8] Text "Daylight Saving Time ends, All day:"
+[15|h6nc] Text "Tuesday 03 November 2026, Open Day View"
+[16|kgnz] Text "Election Day, All day:"
+[17|uj6t] Text "Nov 8 – 14"
+[18|cccw] Text "Wednesday 11 November 2026, Open Day View"
+[19|q98u] Text "Veterans Day, All day:"
+[20|fsas] Text "Nov 15 – 21"
+[21|9x51] Text "Nov 22 – 28"
+[22|fhvh] Text "Thursday 26 November 2026, Open Day View"
+[23|xjmp] Text "Thanksgiving Day, All day:"
+[24|6hvg] Text "Friday 27 November 2026, Open Day View"
+[25|b54c] Text "Black Friday, All day:"
+[26|27f3] ImageButton "Create new event and more" [click]
+[27|mtnc] Scrollable [scroll-down]
+[28|tkxc] Text "Nov 29 – Dec 5"
+
+--- timings: wait=12ms reads=1 read=0ms extract=12ms screenshot=6ms serialize=2ms single-pass=20ms

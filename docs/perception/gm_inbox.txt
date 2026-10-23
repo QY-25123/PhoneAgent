@@ -1,0 +1,31 @@
+App: com.google.android.gm  标题: Samp  屏幕: 1080x2400  元素: 28
+[1|az2c] Scrollable #thread_list_view [scroll-down]
+[2|sy4s] Button #open_search [click]
+[3|7yxa] ImageButton "Open navigation drawer" [click]
+[4|5rhn] Button "Signed in as Test User test.user@example.com Account and settings." [click]
+[5|t6ex] Text "Primary"
+[6|r5ns] Text "Sample text Sample text Sample text Sample text"
+[7|a761] Button "Dismiss" (Dismiss tip) [click]
+[8|6j5a] Text "Sample text Sample text Sam"
+[9|r03g] ImageButton "More options" [click]
+[10|3epf] Text "Sample text Sample text Sample text Sample text Sample text Samp"
+[11|6tae] Button "Unsubscribe" [click]
+[12|16an] Button "No thanks" [click]
+[13|j7x2] Button "Promotions Sample text Sample text Sample text Sample text Sample text Sample te…(共244字)" [click]
+[14|dv22] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共206字)" [click,long-click]
+[15|19uc] ImageButton #contact_image [click,long-click]
+[16|vrs9] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共206字)" [click,long-click]
+[17|zbbx] ImageButton #contact_image [click,long-click]
+[18|mhfs] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共287字)" [click,long-click]
+[19|aty8] ImageButton #contact_image [click,long-click]
+[20|5c0f] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共253字)" [click,long-click]
+[21|1k7z] ImageButton #contact_image [click,long-click]
+[22|jduw] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共289字)" [click,long-click]
+[23|u400] ImageButton #contact_image [click,long-click]
+[24|dzmn] Button "Compose" [click]
+[25|df6r] Button "Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample text Sample t…(共268字)" [click,long-click]
+[26|pmca] ImageButton #contact_image [click,long-click]
+[27|xe6e] Text "Mail, More than 99 new notifications"
+[28|rv1z] Button "Meet" [click]
+
+--- timings: wait=15ms reads=1 read=0ms extract=15ms screenshot=4ms serialize=4ms single-pass=23ms

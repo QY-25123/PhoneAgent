@@ -205,4 +205,22 @@ class ElementExtractorTest {
         val r = extract(window(listOf(node(0, "android.view.View", listOf(0, 0, 500, 100), desc = "Mail, 99 new"))))
         assertThat(r.elements.single().type).isEqualTo("Text")
     }
+
+    @Test
+    fun placeholderTextIsAHintNotContent() {
+        val r = extract(window(listOf(node(0, "android.widget.EditText", listOf(0, 0, 900, 100), text = "Subject", sh = true, edit = true))))
+        val e = r.elements.single()
+        assertThat(e.text).isNull()
+        assertThat(e.hint).isEqualTo("Subject")
+    }
+
+    @Test
+    fun unlabeledEditableBorrowsLabelFromSameRow() {
+        val r = extract(window(listOf(
+            node(0, "android.widget.Button", listOf(0, 300, 120, 400), text = "To", clk = true),
+            node(0, "android.widget.EditText", listOf(130, 300, 900, 400), edit = true),
+            node(0, "android.widget.Button", listOf(0, 600, 120, 700), text = "离得很远", clk = true),
+        )))
+        assertThat(r.elements.first { it.type == "EditText" }.hint).isEqualTo("To")
+    }
 }

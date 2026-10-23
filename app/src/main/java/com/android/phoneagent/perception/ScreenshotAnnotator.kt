@@ -19,10 +19,12 @@ object ScreenshotAnnotator {
 
     class Result(val jpeg: ByteArray, val width: Int, val height: Int)
 
-    /** [elements] 的坐标是原始屏幕像素（[srcW]×[srcH]）；输出宽度 [outW]，按比例缩放。 */
-    fun annotate(src: Bitmap, elements: List<UiElement>, outW: Int = 720, quality: Int = 70): Result {
-        val scale = outW.toFloat() / src.width
-        val outH = (src.height * scale).toInt()
+    /**
+     * [elements] 的坐标是屏幕像素，屏幕宽 [screenW]（位图 [src] 可以是缩小过的，只要宽高比一样）；输出宽度 [outW]。
+     */
+    fun annotate(src: Bitmap, elements: List<UiElement>, screenW: Int, outW: Int = 720, quality: Int = 70): Result {
+        val scale = outW.toFloat() / screenW
+        val outH = (src.height * outW.toFloat() / src.width).toInt()
         val bmp = Bitmap.createScaledBitmap(src, outW, outH, true).copy(Bitmap.Config.ARGB_8888, true)
         val c = Canvas(bmp)
         val box = Paint().apply { style = Paint.Style.STROKE; strokeWidth = 2f }

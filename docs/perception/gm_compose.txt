@@ -1,0 +1,18 @@
+App: com.google.android.gm  标题: Sampl  屏幕: 1080x2400  元素: 15
+[1|7ek6] ImageButton "Navigate up" [click]
+[2|3ekb] Button "Attach file" [click,long-click]
+[3|z75z] Button "Send" [click]
+[4|9rpu] ImageButton "More options" [click,long-click]
+[5|8vcx] Text "Compose"
+[6|jufp] Button "From" [click]
+[7|erw4] Text "Sample text Sample tex"
+[8|8ax3] ImageButton "Add Cc/Bcc" [click]
+[9|gfb0] Button "To" [click]
+[10|v522] Button #peoplekit_autocomplete_chip_group [click]
+[11|7wc6] EditText "To" [click,long-click,edit] focused
+[12|uqv3] EditText "Subject" [click,long-click,edit]
+[13|4qne] EditText = "Compose email" [edit] focused
+[14|b69q] Button #composearea_tap_trap_bottom [click]
+[15|kmym] Button "Help me write" [click]
+
+--- timings: wait=3ms reads=1 read=0ms extract=3ms screenshot=4ms serialize=0ms single-pass=7ms
