@@ -31,3 +31,5 @@ Kotlin + Jetpack Compose + Shizuku（api / provider）。参考 scrcpy server �
   `adb shell am broadcast -a com.android.phoneagent.CMD -n com.android.phoneagent/.CmdReceiver --es cmd <connect|display|launch|tap|swipe|back|text|dump|stop>`
 - 构建需要 Android Studio 自带 JBR：`JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew installDebug`
 - 特权代码在 `priv/`（UserService，shell uid）；`UiAutomationHelper` 是可复用的界面树/输入模块。
+- 回归脚本在 `scripts/`：`regress.sh`（总入口）= `guard_test.sh` + `back_test.sh` + `ime_test.sh`。改动 `priv/`、`Agent`、`UserActivityGuard` 后都要跑。结论和约束见 `docs/spike-summary.md`、`docs/known-issues.md`。
+- 虚拟屏上的所有动作必须经过 `UserActivityGuard`（`Agent.call(guarded = true)`）；返回键必须用带 displayId 的 KeyEvent，禁止 `GLOBAL_ACTION_BACK`。

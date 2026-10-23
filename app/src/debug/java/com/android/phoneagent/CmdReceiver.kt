@@ -22,6 +22,7 @@ class CmdReceiver : BroadcastReceiver() {
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))
             "gback" -> Agent.globalBack()
             "stop" -> Agent.stop()
+            "maintext" -> android.util.Log.i("PA", "MAIN_FIELD=" + Agent.mainFieldText)
         }
     }
 }

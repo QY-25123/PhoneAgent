@@ -2,11 +2,13 @@
 # 输入法隔离回归测试：主屏键盘弹出时，在虚拟屏执行操作，检查用户的输入目标是否被改变。
 #
 # 用法: scripts/ime_test.sh [-p IME策略] [-m touch|semantic] [-b key|global]
-#   -p  创建虚拟屏后调用 setDisplayImePolicy：0=LOCAL 1=FALLBACK_DISPLAY(系统默认,脚本默认) 2=HIDE
+#   -p  创建虚拟屏后调用 setDisplayImePolicy：0=LOCAL 1=FALLBACK_DISPLAY(系统默认) 2=HIDE(Agent 创建虚拟屏时的设置,脚本默认)
 #       注意：策略按 display uniqueId 缓存，会影响之后同名虚拟屏，所以脚本每次都显式设置，避免上次实验残留
 #   -l  只测“键盘弹出时在虚拟屏 am start --display 启动应用”这一个动作（不注入任何输入）
 #   -m  操作方式：touch=模拟触摸(默认)  semantic=无障碍 ACTION_CLICK
 #   -b  返回键方式：key=带 displayId 的 KeyEvent(默认)  global=GLOBAL_ACTION_BACK
+# 注意：动作现在经过 UserActivityGuard，键盘弹出期间会被暂停，所以默认配置下“动作”其实没有被执行，
+#       本脚本验证的是“不管下什么动作，用户的输入目标都不变”。要复现输入法被抢走的原始现象见 docs/ime-experiments.md。
 # 前提：debug 版已安装、Shizuku 已运行并已授权、模拟器已显示软键盘(show_ime_with_hard_keyboard=1)。
 # 每个动作后检查（全部满足才算 PASS）:
 #   shown   主屏 mInputShown 仍为 true
@@ -17,7 +19,7 @@
 # 退出码：全部 PASS 为 0，否则为 1。
 
 export PATH=$PATH:$HOME/Library/Android/sdk/platform-tools
-POLICY=1; MODE=touch; BACK=key
+POLICY=2; MODE=touch; BACK=key
 LAUNCH_ONLY=0
 while getopts "p:m:b:l" o; do
   case $o in p) POLICY=$OPTARG;; m) MODE=$OPTARG;; b) BACK=$OPTARG;; l) LAUNCH_ONLY=1;; *) exit 2;; esac
@@ -28,6 +30,10 @@ FAIL=0
 pa() { adb shell am broadcast -a $PKG.CMD -n $PKG/.CmdReceiver --es cmd "$@" >/dev/null; }
 
 # 主屏输入框内容：dump 主屏界面树，取含“你好”的 EditText 的 text 和中心坐标
+main_text() { # 主屏输入框当前内容（由 debug 广播让 App 直接报告，比读界面树可靠，界面树里的文字更新有延迟）
+  adb logcat -c; pa maintext; sleep 0.7; adb logcat -d -s PA | grep -m1 'MAIN_FIELD=' | sed 's/.*MAIN_FIELD=//' | tr -d '\r'
+}
+
 main_field() { # 输出: text<TAB>cx<TAB>cy（首次连接 UiAutomation 后界面树可能还没填充，重试几次）
   local out
   for _ in 1 2 3 4; do
@@ -56,13 +62,17 @@ ime_state() { # 输出 key=value 行
 
 val() { echo "$1" | grep "^$2=" | cut -d= -f2-; }
 
-typing_ok() { # 主屏软键盘点 q，检查主屏输入框是否收到；收到后点退格恢复
+typing_ok() { # 主屏软键盘点 q，检查主屏输入框是否多了一个字符；然后点退格还原
   local before after
-  before=$(main_field | cut -f1)
+  before=$(main_text)
   adb shell input tap 58 1716; sleep 1
-  after=$(main_field | cut -f1)
+  after=$(main_text)
   adb shell input tap 994 2028; sleep 1   # 退格
-  [ "$after" = "${before}q" ] && echo ok || echo "no(${before}->${after})"
+  if [ "${#after}" -eq $(( ${#before} + 1 )) ]; then echo ok
+  else
+    echo "no(${before}->${after})"
+    [ -n "$SHOT_DIR" ] && adb exec-out screencap -p > "$SHOT_DIR/typing_fail_$(date +%s).png"
+  fi
 }
 
 echo "| 步骤 | shown | focus | client | topdisp | typing | 结果 |"

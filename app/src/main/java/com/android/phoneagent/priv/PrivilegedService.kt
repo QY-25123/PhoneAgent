@@ -11,6 +11,7 @@ class PrivilegedService : IPrivileged.Stub() {
     private val display = VirtualDisplayHolder(context)
     private val input = InputInjector()
     private val ui = UiAutomationHelper()
+    private val mainScreen = MainScreenState()
 
     override fun destroy() {
         System.exit(0)
@@ -49,8 +50,13 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
     override fun globalBack() = ui.globalBack()
 
+    override fun isMainImeShown() = mainScreen.isImeShown()
+    override fun restoreMainFocus() = input.focusDisplay(0)
+
     override fun release() {
         ui.close()
         display.release()
+        // 销毁 display 后 top focused display 可能还指着它，必须切回主屏
+        input.focusDisplay(0)
     }
 }

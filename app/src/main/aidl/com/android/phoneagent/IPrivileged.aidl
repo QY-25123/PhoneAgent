@@ -25,5 +25,11 @@ interface IPrivileged {
     // 对虚拟屏上第一个可滚动节点执行 ACTION_SCROLL_FORWARD/BACKWARD
     boolean scroll(int displayId, boolean forward) = 12;
     // UiAutomation.performGlobalAction(GLOBAL_ACTION_BACK)，无 displayId 参数
+    // 禁用：作用于 top focused display，会误操作主屏。仅供 scripts/back_test.sh 证明用
     boolean globalBack() = 13;
+
+    // UserActivityGuard 用：主屏软键盘是否正在显示（用户正在打字）
+    boolean isMainImeShown() = 14;
+    // 把 top focused display 切回主屏
+    void restoreMainFocus() = 15;
 }

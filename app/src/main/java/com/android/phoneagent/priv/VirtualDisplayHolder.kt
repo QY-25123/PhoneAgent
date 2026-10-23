@@ -7,6 +7,7 @@ import android.view.Surface
 /** 以 shell 身份创建/释放 VirtualDisplay（参考 scrcpy --new-display 的 flags）。 */
 class VirtualDisplayHolder(private val context: FakeContext) {
     private var display: VirtualDisplay? = null
+    private val tasks = DisplayTasks()
 
     fun create(surface: Surface, width: Int, height: Int, dpi: Int): Int {
         release()
@@ -19,6 +20,7 @@ class VirtualDisplayHolder(private val context: FakeContext) {
     }
 
     fun release() {
+        display?.let { runCatching { tasks.removeAll(it.display.displayId) } }
         display?.release()
         display = null
     }

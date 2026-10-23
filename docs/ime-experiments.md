@@ -50,7 +50,10 @@
 3. **方案 C（无障碍语义操作）无法达成目标**：ACTION_CLICK 引起的页面跳转同样切走 top focused display，结果和触摸一样。ACTION_SET_TEXT 本身不改变输入法状态（已验证），但必须先让目标输入框获得焦点，而获得焦点这一步就会触发上面的问题。
 4. **GLOBAL_ACTION_BACK 必须禁用**：它作用于 top focused display，主屏是 top focused display 时会误关主屏的 App。返回键一律用带 displayId 的 KeyEvent（两种场景都只作用于虚拟屏）。
 
-## 尚未尝试的方向（需要你决定）
+## 后续决定
+采用方案 A「让 agent 让位于用户打字」+ 方案 C「事后切回主屏」，实现为 `UserActivityGuard`，详见 `docs/spike-summary.md`。方案 B、D 记入 `docs/known-issues.md` 作为以后的优化方向。
+
+## 当时列出的候选方向
 - **A. 让 agent 让位于用户打字**：每次操作前检查主屏 `mInputShown`/输入目标，用户正在打字时暂停 agent 操作。能保证不干扰用户，代价是用户打字期间 agent 会暂停。最稳妥，不依赖系统内部行为。
 - **B. 阻止启动时抢前台**：用 `ActivityOptions.setAvoidMoveToFront()` 之类的选项启动虚拟屏上的 Activity，看能否不改变 top focused display。未验证，且只覆盖「启动」，不覆盖页面内跳转和触摸。
 - **C. 事后把 top focused display 切回主屏**（如 `IWindowManager.moveDisplayToTopIfAllowed(0)`）并重新显示键盘。键盘已经被收起过，用户会看到闪一下，且输入连接可能已被切走，不满足「不能收起」。

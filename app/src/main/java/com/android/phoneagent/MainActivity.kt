@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,11 +42,15 @@ class MainActivity : ComponentActivity() {
                     var x by rememberSaveable { mutableStateOf("540") }
                     var y by rememberSaveable { mutableStateOf("740") }
                     var text by rememberSaveable { mutableStateOf("你好，世界") }
+                    LaunchedEffect(text) { Agent.mainFieldText = text }
                     Column(
                         Modifier.padding(innerPadding).padding(16.dp).verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text("状态：${Agent.status}")
+                        if (Agent.waitingForUser) {
+                            Text("等待用户输入完成", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.titleMedium)
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = { Agent.connect() }) { Text("连接") }
                             Button(onClick = { Agent.startDisplay() }) { Text("创建虚拟屏") }
