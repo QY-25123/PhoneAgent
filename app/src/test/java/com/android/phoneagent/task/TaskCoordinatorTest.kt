@@ -12,6 +12,7 @@ import com.android.phoneagent.agent.clarifyJson
 import com.android.phoneagent.agent.editorScreen
 import com.android.phoneagent.agent.screenOf
 import com.android.phoneagent.agent.verifyJson
+import com.android.phoneagent.agent.stepJson
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -131,5 +132,67 @@ class TaskCoordinatorTest {
         c.submit("周二下午3点日历加 [PA测试] 评审会")
         settle()
         assertThat(events.filterIsInstance<TaskEvent.Failed>().single().reason).contains("Shizuku")
+    }
+
+    // ---- 邮件（T2）----
+    private val emailReady = clarifyJson(type = "email", recipient = "qijie_jerry@163.com", content = "改期", subject = "[PA测试] 周五评审", body = "你好，周五评审改到下午3点。谢谢")
+    private fun gmail() = com.android.phoneagent.agent.gmailScreen()
+    private fun mailPhone() = FakePhone({ if (it < 3) gmail() else screenOf("已发送", "x") })
+
+    @Test fun emailShowsAConfirmationCardAndSendsOnlyAfterTheUserChoosesSend() = runTest {
+        val phone = mailPhone()
+        val (c, env, events) = setup(listOf(emailReady, stepJson("done", success = true, result = "在已发送里看到了"), verifyJson(true)), phone)
+        c.submit("给 qijie_jerry@163.com 发邮件")
+        settle()
+        val card = events.filterIsInstance<TaskEvent.Confirm>().single()
+        assertThat(card.to).isEqualTo("qijie_jerry@163.com")
+        assertThat(card.subject).isEqualTo("[PA测试] 周五评审")
+        assertThat(phone.armed).isEmpty()                                  // 用户还没选：没有布防，更没有发送
+        assertThat(phone.executed).isEmpty()
+        c.confirm(ConfirmChoice.SEND)
+        settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Succeeded::class.java)
+        assertThat((events.last() as TaskEvent.Succeeded).title).contains("qijie_jerry@163.com")
+        assertThat(phone.armed).hasSize(1)
+        assertThat(c.busy.value).isFalse()
+        assertThat(env.releases).isAtLeast(1)
+    }
+
+    @Test fun cancelOnTheCardStopsWithoutSending() = runTest {
+        val phone = mailPhone()
+        val (c, _, events) = setup(listOf(emailReady, stepJson("done", success = true, result = "草稿已丢弃"), verifyJson(true)), phone)
+        c.submit("给 qijie_jerry@163.com 发邮件")
+        settle()
+        c.confirm(ConfirmChoice.CANCEL)
+        settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Stopped::class.java)
+        assertThat(phone.armed).isEmpty()
+        assertThat(phone.executed.filterIsInstance<com.android.phoneagent.agent.Action.Tap>().filter { it.index == 2 }).isEmpty()
+    }
+
+    @Test fun typingWhileTheCardIsWaitingCountsAsAModificationRequest() = runTest {
+        val phone = FakePhone({ gmail() })
+        val (c, _, events) = setup(listOf(emailReady, stepJson("done", success = true, result = "草稿已修改")), phone)
+        c.submit("给 qijie_jerry@163.com 发邮件")
+        settle()
+        assertThat(c.submit("正文改成下午4点")).isFalse()       // 不是新任务
+        settle()
+        assertThat(events.filterIsInstance<TaskEvent.Confirm>()).hasSize(2)   // 改完后重新出现确认卡片
+    }
+
+    @Test fun retryAfterAnAttemptedSendChecksTheSentFolderBeforeSendingAgain() = runTest {
+        // 第一次：点了发送但没能在已发送里确认 → 失败（sendAttempted）；第二次同一封邮件：先查已发送，发现已发出 → 不再发送
+        val phone = mailPhone()
+        val failFirst = listOf(emailReady, stepJson("done", success = true, result = "没找到"), verifyJson(false, "没有"), stepJson("done", success = true, result = "没找到"), verifyJson(false, "没有"))
+        val replies = failFirst + listOf(emailReady, stepJson("done", success = true, result = "已发送里有"), verifyJson(true))
+        val (c, _, events) = setup(replies, phone)
+        c.submit("给 qijie_jerry@163.com 发邮件"); settle()
+        c.confirm(ConfirmChoice.SEND); settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Failed::class.java)
+        val armedBefore = phone.armed.size
+        c.submit("给 qijie_jerry@163.com 发邮件"); settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Succeeded::class.java)
+        assertThat((events.last() as TaskEvent.Succeeded).title).contains("没有重复发送")
+        assertThat(phone.armed.size).isEqualTo(armedBefore)            // 第二次没有再布防/发送
     }
 }

@@ -60,9 +60,9 @@ class EmailFlowTest {
         // 用户只说了名字：模型在界面上选了联系人建议；确认卡片展示的是页面上实际的邮箱地址，不是名字
         val t = EmailTask("Alice", "[PA测试] 改期", "你好，改期了。")
         val page = gmailScreen(to = "alice@example.com", subject = t.subject, body = t.body)
-        val phone = phoneWith(page, page, page, page, page, page, last = page)
+        val phone = phoneWith(page, page, last = inboxScreen("Drafts"))
         val host = Host(listOf(ConfirmDecision.Cancel))
-        val model = FakeModel(listOf(stepJson("done", success = true, result = "草稿已备好"), stepJson("done", success = true, result = "已丢弃"), verifyJson(true)))
+        val model = FakeModel(listOf(stepJson("done", success = true, result = "草稿已备好"), stepJson("done", success = true, result = "已丢弃"), stepJson("done", success = true, result = "没有残留"), verifyJson(true)))
         flow(model, phone, host).run(t)
         assertThat(host.shown.first().to).containsExactly("alice@example.com")
         assertThat(phone.emailTask).isEqualTo(t)
@@ -84,19 +84,22 @@ class EmailFlowTest {
     }
 
     @Test fun cancelDiscardsTheDraftAndChecksTheDraftsFolder() = runTest {
-        val phone = phoneWith(composeOk, composeOk, composeOk, last = inboxScreen("Drafts"))
+        val phone = phoneWith(composeOk, composeOk, last = inboxScreen("Drafts"))
         val host = Host(listOf(ConfirmDecision.Cancel))
-        val model = FakeModel(listOf(stepJson("tap", index = 3), stepJson("done", success = true, result = "草稿已丢弃，草稿箱没有该主题"), verifyJson(true)))
+        // 丢弃循环：点 More options → 写邮件页关闭，本地核对通过（不调用模型）；然后单独打开草稿箱核对（模型 + 自查）
+        val model = FakeModel(listOf(stepJson("tap", index = 3), stepJson("done", success = true, result = "草稿已丢弃"), stepJson("done", success = true, result = "草稿箱里没有该主题"), verifyJson(true)))
         val r = flow(model, phone, host).run(task) as EmailResult.Cancelled
         assertThat(r.discarded).isTrue()
+        assertThat(phone.opened).contains("gmail")                 // 丢弃后 Gmail 任务已关闭：核对草稿箱前重新打开 Gmail
         assertThat(sendTaps(phone)).isEmpty()                      // 取消：绝不点发送
         assertThat(phone.armed).isEmpty()
         assertThat(model.requests.any { it.messages.single().text.contains("丢弃") }).isTrue()
     }
 
     @Test fun cancelReportsWhenTheDraftsFolderCouldNotBeConfirmed() = runTest {
-        val phone = phoneWith(composeOk, composeOk, composeOk, last = inboxScreen("Drafts"))
-        val model = FakeModel(listOf(stepJson("done", success = true, result = "好了"), verifyJson(false, "草稿箱里还有该主题的草稿"), stepJson("done", success = true, result = "好了"), verifyJson(false, "草稿箱里还有该主题的草稿")))
+        val phone = phoneWith(composeOk, composeOk, last = inboxScreen("Drafts"))
+        val model = FakeModel(listOf(stepJson("done", success = true, result = "好了"), stepJson("done", success = true, result = "好了"), verifyJson(false, "草稿箱里还有该主题的草稿"),
+            stepJson("done", success = true, result = "好了"), verifyJson(false, "草稿箱里还有该主题的草稿")))
         val r = flow(model, phone, Host(listOf(ConfirmDecision.Cancel))).run(task) as EmailResult.Cancelled
         assertThat(r.discarded).isFalse()
         assertThat(r.note).contains("草稿箱里还有")
@@ -127,9 +130,9 @@ class EmailFlowTest {
 
     @Test fun blockedSendClickReconfirms() = runTest {
         var tapped = 0
-        val phone = FakePhone({ composeOk }, outcome = { _, a -> if (a is Action.Tap && a.index == 2 && tapped++ == 0) ActionOutcome(false, "草稿内容与确认的不一致", blocked = true) else ActionOutcome(true, "ok") })
+        val phone = FakePhone({ if (it < 4) composeOk else inboxScreen("Drafts") }, outcome = { _, a -> if (a is Action.Tap && a.index == 2 && tapped++ == 0) ActionOutcome(false, "草稿内容与确认的不一致", blocked = true) else ActionOutcome(true, "ok") })
         val host = Host(listOf(ConfirmDecision.Send, ConfirmDecision.Cancel))
-        val model = FakeModel(listOf(stepJson("done", success = true, result = "草稿已丢弃"), verifyJson(true)))
+        val model = FakeModel(listOf(stepJson("done", success = true, result = "草稿已丢弃"), stepJson("done", success = true, result = "没有残留"), verifyJson(true)))
         val r = flow(model, phone, host).run(task)
         assertThat(r).isInstanceOf(EmailResult.Cancelled::class.java)
         assertThat(host.said.single()).contains("拦住")

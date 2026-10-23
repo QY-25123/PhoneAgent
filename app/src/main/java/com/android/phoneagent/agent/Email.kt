@@ -60,14 +60,15 @@ class VerifySentTask(private val to: String, private val subject: String) : Loop
     override val leftovers = listOf("不确定邮件是否已发出，请在 Gmail 的「已发送」里查看（发给 $to，主题「$subject」）")
     override val stepSystem = Prompts.stepSystem(Prompts.GMAIL_SENT_SECTION)
     override val verifySystem = Prompts.VERIFY_SENT_SYSTEM
-    override suspend fun prelaunch(phone: PhoneController) = ActionOutcome(true, "ok")
-    override val prelaunchOkNote = "刚点过发送，Gmail 应该回到了收件箱（撤销发送时间已过）"
-    override val prelaunchFailNote = ""
+    // 发送之后 Gmail 的任务常常已经关闭（虚拟屏全黑）：先重新打开 Gmail 再查
+    override suspend fun prelaunch(phone: PhoneController) = phone.openApp("gmail")
+    override val prelaunchOkNote = "重新打开了 Gmail（刚点过发送，撤销发送时间已过）"
+    override val prelaunchFailNote = "重新打开 Gmail"
 }
 
 /** 丢弃本次任务创建的草稿，并核对草稿箱没有残留。 */
 class DiscardDraftTask(private val subject: String) : LoopTask {
-    override val taskText = "丢弃本次任务创建的 Gmail 草稿（主题「$subject」），并确认草稿箱没有残留"
+    override val taskText = "丢弃本次任务创建的 Gmail 草稿（主题「$subject」）"
     override val confirmed = "要丢弃的草稿主题：$subject"
     override val leftovers = listOf("Gmail 草稿箱里可能还留有主题为「$subject」的草稿，请检查")
     override val stepSystem = Prompts.stepSystem(Prompts.GMAIL_DISCARD_SECTION)
@@ -75,6 +76,21 @@ class DiscardDraftTask(private val subject: String) : LoopTask {
     override suspend fun prelaunch(phone: PhoneController) = ActionOutcome(true, "ok")
     override val prelaunchOkNote = "当前应该就在 Gmail 写邮件页"
     override val prelaunchFailNote = ""
+    // 丢弃后写邮件页会关闭（屏幕常常全黑）：不再是写邮件页就算丢弃动作完成，草稿箱另外核对
+    override fun localVerify(screen: ScreenState): Pair<Boolean, String>? =
+        if (GmailDraft.isCompose(screen)) false to "还停在写邮件页，草稿没有丢弃" else true to "写邮件页已关闭"
+}
+
+/** 核对草稿箱里没有本次任务的草稿（没有就算干净；有就丢弃）。 */
+class CheckDraftsTask(private val subject: String) : LoopTask {
+    override val taskText = "确认 Gmail 草稿箱里没有主题为「$subject」的草稿"
+    override val confirmed = "要确认没有的草稿主题：$subject"
+    override val leftovers = listOf("Gmail 草稿箱里可能还留有主题为「$subject」的草稿，请检查")
+    override val stepSystem = Prompts.stepSystem(Prompts.GMAIL_DRAFTS_SECTION)
+    override val verifySystem = Prompts.VERIFY_DRAFTS_SYSTEM
+    override suspend fun prelaunch(phone: PhoneController) = phone.openApp("gmail")
+    override val prelaunchOkNote = "重新打开了 Gmail"
+    override val prelaunchFailNote = "重新打开 Gmail"
 }
 
 // ---------------------------------------------------------------- 流程
@@ -183,10 +199,12 @@ class EmailFlow(
     private suspend fun readDraft(): Draft? = GmailDraft.read(phone.perceive().state)
 
     private suspend fun cancel(draft: Draft): EmailResult {
-        val r = loop().run(DiscardDraftTask(draft.subject))
-        return when (r) {
+        val d = loop().run(DiscardDraftTask(draft.subject))
+        if (d is LoopResult.Failure) return EmailResult.Cancelled(false, "没能丢弃草稿：${d.reason}。草稿「${draft.subject}」可能还在 Gmail 草稿箱里，请手动检查")
+        val c = loop().run(CheckDraftsTask(draft.subject))
+        return when (c) {
             is LoopResult.Success -> EmailResult.Cancelled(true, "草稿已丢弃，草稿箱里没有残留")
-            is LoopResult.Failure -> EmailResult.Cancelled(false, "没能确认草稿已丢弃：${r.reason}")
+            is LoopResult.Failure -> EmailResult.Cancelled(false, "草稿已丢弃，但没能确认草稿箱是否干净：${c.reason}。请手动检查 Gmail 草稿箱")
         }
     }
 }
