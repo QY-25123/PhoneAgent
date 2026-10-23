@@ -156,6 +156,7 @@ class TaskCoordinatorTest {
         settle()
         assertThat(events.last()).isInstanceOf(TaskEvent.Succeeded::class.java)
         assertThat((events.last() as TaskEvent.Succeeded).title).contains("qijie_jerry@163.com")
+        assertThat(events).contains(TaskEvent.ConfirmResolved(ConfirmChoice.SEND))   // 界面据此去掉卡片上的按钮
         assertThat(phone.armed).hasSize(1)
         assertThat(c.busy.value).isFalse()
         assertThat(env.releases).isAtLeast(1)

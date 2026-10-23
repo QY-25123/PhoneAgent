@@ -85,7 +85,7 @@ class TaskCoordinator(
         emit(TaskEvent.UserSaid(t))
         synchronized(lock) {
             pendingAnswer?.let { it.complete(t); pendingAnswer = null; return false }
-            pendingConfirm?.let { earlyInstruction = t; it.complete(ConfirmChoice.MODIFY); pendingConfirm = null; return false }
+            pendingConfirm?.let { earlyInstruction = t; it.complete(ConfirmChoice.MODIFY); pendingConfirm = null; emit(TaskEvent.ConfirmResolved(ConfirmChoice.MODIFY)); return false }
             if (session?.isActive == true) {
                 emit(TaskEvent.AgentSaid("我还在处理上一件事，你可以先停止它。"))
                 return false
@@ -119,7 +119,8 @@ class TaskCoordinator(
     }
 
     override fun confirm(choice: ConfirmChoice) {
-        synchronized(lock) { pendingConfirm?.complete(choice); pendingConfirm = null }
+        val had = synchronized(lock) { pendingConfirm?.complete(choice); (pendingConfirm != null).also { pendingConfirm = null } }
+        if (had) emit(TaskEvent.ConfirmResolved(choice))
     }
 
     private fun emit(e: TaskEvent) {
@@ -135,6 +136,7 @@ class TaskCoordinator(
             is TaskEvent.Started -> "开始：${e.title}"
             is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
             is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject}"
+            is TaskEvent.ConfirmResolved -> "确认卡片已选择：${e.choice}"
             is TaskEvent.Handoff -> "交接：${e.where}｜${e.summary}"
             is TaskEvent.Succeeded -> "成功：${e.title} ${e.detail}"
             is TaskEvent.Failed -> "失败：${e.reason}"

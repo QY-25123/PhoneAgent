@@ -87,7 +87,19 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
                 add(ChatItem.Confirm(id(), e.to, e.subject, e.body, ConfirmState.PENDING, e.kind))
                 liveStatus(LiveStatus.WAITING, if (e.kind == "cart") "等你确认修改购物车" else "等你确认后发送")
             }
+            is TaskEvent.ConfirmResolved -> {
+                val pending = items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.PENDING } as? ChatItem.Confirm ?: return
+                replace(pending.id) {
+                    (it as ChatItem.Confirm).copy(state = when (e.choice) {
+                        ConfirmChoice.SEND -> ConfirmState.SENDING
+                        ConfirmChoice.MODIFY -> ConfirmState.SUPERSEDED
+                        ConfirmChoice.CANCEL -> ConfirmState.CANCELLED
+                    })
+                }
+                if (e.choice == ConfirmChoice.SEND) liveStatus(LiveStatus.RUNNING, if (pending.kind == "cart") "正在修改购物车" else "正在发送")
+            }
             is TaskEvent.Handoff -> {
+                items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }
                 liveStatus(LiveStatus.DONE, e.where)
                 add(ChatItem.Handoff(id(), e.where, e.summary, false))
             }
@@ -154,15 +166,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     fun onConfirm(a: ConfirmAction) {
         if (backend != null) {
-            val pending = items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.PENDING } ?: return
-            replace(pending.id) {
-                (it as ChatItem.Confirm).copy(state = when (a) {
-                    ConfirmAction.SEND -> ConfirmState.SENDING
-                    ConfirmAction.MODIFY -> ConfirmState.SUPERSEDED
-                    ConfirmAction.CANCEL -> ConfirmState.CANCELLED
-                })
-            }
-            if (a == ConfirmAction.SEND) liveStatus(LiveStatus.RUNNING, "正在发送")
+            // 卡片状态由后端的 ConfirmResolved 事件更新（这样别的入口做的选择，界面也会同步，按钮不会留着）
             backend.confirm(when (a) { ConfirmAction.SEND -> ConfirmChoice.SEND; ConfirmAction.MODIFY -> ConfirmChoice.MODIFY; ConfirmAction.CANCEL -> ConfirmChoice.CANCEL })
             return
         }

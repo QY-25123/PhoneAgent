@@ -96,12 +96,14 @@ class ShoppingTest {
             override fun onStep(info: StepInfo) {}
             override suspend fun askUser(question: String, options: List<String>) = if (options.isNotEmpty()) "调整购物车" else "把商品2删掉，商品1改成2件"
             override suspend fun confirmCartChanges(lines: List<String>): Boolean { this.lines += lines; confirmedAtEdit = phone.executed.size; return true }
-            override fun say(text: String) {}
+            val said = ArrayList<String>()
+            override fun say(text: String) { said += text }
         }
         val model = FakeModel(listOf(plan, stepJson("tap", index = 3), stepJson("done", success = true, result = "改好了"), verifyJson(true), proceed, doneOk))
         val r = ShoppingFlow(model, phone, host, LoopConfig(), { NOW }, NoopRunLog, sleep = {}).run(ShoppingTask(null, 1, true, null))
         assertThat(r).isInstanceOf(ShoppingResult.Handoff::class.java)
         assertThat(host.lines).containsExactly("删除：商品2", "「商品1」数量改为 2").inOrder()
+        assertThat(host.said.single()).contains("删除：商品2")          // 改完直接告诉用户做了什么
         assertThat(confirmedAtEdit).isEqualTo(0)                           // 确认的那一刻：还没有任何点击
     }
 

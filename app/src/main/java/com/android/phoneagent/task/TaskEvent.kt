@@ -24,6 +24,9 @@ sealed interface TaskEvent {
     /** 邮件确认卡片：收件人、主题、正文**都是从 Gmail 写邮件页实际读到的内容**，用户确认的就是将要发送的内容 */
     data class Confirm(val to: String, val subject: String, val body: String, val kind: String = "email") : TaskEvent
 
+    /** 用户对确认卡片做了选择（不管是点界面上的按钮，还是别的入口）：界面据此更新卡片状态、去掉按钮 */
+    data class ConfirmResolved(val choice: ConfirmChoice) : TaskEvent
+
     /** 已停在 Amazon 提交订单页：交给用户付款。用户点「去完成」后 [TaskBackend.handoff] 把页面移到主屏 */
     data class Handoff(val where: String, val summary: String) : TaskEvent
 
