@@ -30,4 +30,12 @@ interface IPrivileged {
 
     // UserActivityGuard 用：主屏软键盘是否正在显示（用户正在打字）
     boolean isMainImeShown() = 14;
+
+    // 按文案找控件并点击（touch=true 用触摸，否则 ACTION_CLICK）。命中硬拦截抛 SecurityException。返回描述字符串或 NOT_FOUND
+    String clickText(int displayId, String text, boolean touch) = 16;
+
+    // 某块屏幕上的根任务列表（UV-3 冲突检测 / UV-2 交接用）
+    String listTasks(int displayId) = 17;
+    // 把根任务移到另一块屏幕
+    void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

@@ -12,6 +12,7 @@ class PrivilegedService : IPrivileged.Stub() {
     private val input = InputInjector()
     private val ui = UiAutomationHelper()
     private val mainScreen = MainScreenState()
+    private val tasks = DisplayTasks()
 
     override fun destroy() {
         System.exit(0)
@@ -22,20 +23,54 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int, stealTopFocusDisabled: Boolean): Int =
         display.create(surface, width, height, dpi, stealTopFocusDisabled)
 
-    // 原型阶段直接用 am start --display；--activity-clear-task 避免复用主屏上已有的 task
+    // 原型阶段直接用 am start --display；--activity-clear-task 避免复用主屏上已有的 task。
+    // component 不含 "/" 时当作包名，解析它的 LAUNCHER activity。
     override fun launchApp(displayId: Int, component: String) {
-        val p = ProcessBuilder("am", "start", "--display", displayId.toString(), "--activity-clear-task", "-n", component)
+        val target = if ("/" in component) component else resolveLauncher(component)
+        val p = ProcessBuilder("am", "start", "--display", displayId.toString(), "--activity-clear-task", "-n", target)
             .redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()
         p.waitFor()
         if (out.contains("Error")) error(out.trim())
     }
-    override fun tap(displayId: Int, x: Float, y: Float) = input.tap(displayId, x, y)
-    override fun swipe(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) =
+
+    private fun resolveLauncher(pkg: String): String {
+        val p = ProcessBuilder("cmd", "package", "resolve-activity", "--brief", "-c", "android.intent.category.LAUNCHER", pkg)
+            .redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor()
+        return out.lines().lastOrNull { "/" in it } ?: error("找不到 $pkg 的启动 Activity：$out")
+    }
+
+    /** 硬拦截：命中就抛 SecurityException，动作不执行（SafetyGuard）。 */
+    private fun guardPoint(displayId: Int, x: Float?, y: Float?) {
+        ui.blockReason(displayId, x?.toInt(), y?.toInt())?.let { throw SecurityException("BLOCKED $it") }
+    }
+
+    override fun tap(displayId: Int, x: Float, y: Float) {
+        guardPoint(displayId, x, y)
+        input.tap(displayId, x, y)
+    }
+
+    override fun swipe(displayId: Int, x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long) {
+        ui.blockReason(displayId, x1.toInt(), y1.toInt())?.takeIf { !it.startsWith("页面级") }?.let { throw SecurityException("BLOCKED $it") }
         input.swipe(displayId, x1, y1, x2, y2, durationMs)
+    }
+
+    override fun clickText(displayId: Int, text: String, touch: Boolean): String {
+        val (node, label) = ui.findClickableByText(displayId, text) ?: return "NOT_FOUND"
+        val r = android.graphics.Rect().also { node.getBoundsInScreen(it) }
+        guardPoint(displayId, r.centerX().toFloat(), r.centerY().toFloat())
+        if (touch) input.tap(displayId, r.centerX().toFloat(), r.centerY().toFloat())
+        else node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        return "CLICKED「$label」at ${r.centerX()},${r.centerY()}"
+    }
 
     override fun back(displayId: Int) = input.key(displayId, android.view.KeyEvent.KEYCODE_BACK)
-    override fun setText(displayId: Int, text: String): Boolean = ui.setTextOnFocused(displayId, text)
+    override fun setText(displayId: Int, text: String): Boolean {
+        guardPoint(displayId, null, null)
+        return ui.setTextOnFocused(displayId, text)
+    }
     override fun dumpTree(displayId: Int): String = ui.dump(displayId)
     override fun setImePolicy(displayId: Int, policy: Int): Int {
         val wm = Class.forName("android.view.IWindowManager\$Stub").getMethod("asInterface", android.os.IBinder::class.java)
@@ -46,11 +81,16 @@ class PrivilegedService : IPrivileged.Stub() {
         return old
     }
 
-    override fun clickAt(displayId: Int, x: Float, y: Float) = ui.clickAt(displayId, x.toInt(), y.toInt())
+    override fun clickAt(displayId: Int, x: Float, y: Float): Boolean {
+        guardPoint(displayId, x, y)
+        return ui.clickAt(displayId, x.toInt(), y.toInt())
+    }
     override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
     override fun globalBack() = ui.globalBack()
 
     override fun isMainImeShown() = mainScreen.isImeShown()
+    override fun listTasks(displayId: Int): String = tasks.list(displayId)
+    override fun moveTaskToDisplay(taskId: Int, displayId: Int) = tasks.moveToDisplay(taskId, displayId)
 
     override fun release() {
         ui.close()

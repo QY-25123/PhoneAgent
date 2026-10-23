@@ -162,6 +162,7 @@ object Agent {
         val r = ImageReader.newInstance(WIDTH, HEIGHT, PixelFormat.RGBA_8888, 2)
         r.setOnImageAvailableListener({ onFrame(it) }, Handler(thread.looper))
         readerThread = thread
+        readerHandler = Handler(thread.looper)
         reader = r
         displayId = p.createDisplay(r.surface, WIDTH, HEIGHT, DPI, stealTopFocusDisabled)
         // 虚拟屏上的窗口不许请求输入法，否则 App（如设置搜索页）会在用户的屏幕上弹出键盘。
@@ -184,7 +185,18 @@ object Agent {
 
     fun setText(text: String) = call("写入文字", guarded = true) { report("写入文字 ${if (it.setText(displayId, text)) "成功" else "失败(无聚焦输入框)"}") }
 
-    fun dumpTree(display: Int = displayId) = call("dump 界面树", executor = readIo) { Log.i(TAG, "tree:\n" + it.dumpTree(display)); report("界面树已输出到 logcat") }
+    fun dumpTree(display: Int = displayId, saveTo: java.io.File? = null) = call("dump 界面树", executor = readIo) {
+        val tree = it.dumpTree(display)
+        saveTo?.writeText(tree)
+        Log.i(TAG, "tree:\n$tree")
+        report("界面树已输出到 logcat")
+    }
+
+    fun listTasks(display: Int) = call("任务列表", executor = readIo) { Log.i(TAG, "TASKS display=$display\n" + it.listTasks(display)); report("任务列表已输出") }
+    fun moveTask(taskId: Int, display: Int) = call("移动任务", executor = readIo) { it.moveTaskToDisplay(taskId, display); report("已移动任务 $taskId → display $display") }
+
+    /** 按文案点击（硬拦截生效）。结果写入 status/logcat。 */
+    fun clickText(text: String, touch: Boolean, display: Int = displayId) = call("按文案点击「$text」", guarded = display == displayId) { report("clickText「$text」→ ${it.clickText(display, text, touch)}") }
 
     // 以下是输入法隔离实验用的入口
     fun setImePolicy(policy: Int) = call("IME 策略") { report("IME 策略 display=$displayId ${it.setImePolicy(displayId, policy)} -> $policy") }
@@ -193,22 +205,66 @@ object Agent {
     // 禁用：作用于 top focused display，仅 scripts/back_test.sh 用来证明它会误操作主屏
     fun globalBack() = call("GLOBAL_BACK") { report("GLOBAL_ACTION_BACK ${if (it.globalBack()) "已执行" else "失败"}") }
 
+    // 画面采集频率：默认 1 fps（非全屏，仅供观察）；全屏观看时调高。可用 debug 广播 config 修改
+    @Volatile var previewFps = 1
+    @Volatile var keepFull = false          // debug：保留最近一帧的全分辨率位图，供 shot 保存
+    @Volatile private var lastFull: Bitmap? = null
+    private var readerHandler: Handler? = null
+    private var catchUpPending = false
+    val framesAvailable = java.util.concurrent.atomic.AtomicLong()   // ImageReader 回调次数（虚拟屏实际产出的帧）
+    val framesProcessed = java.util.concurrent.atomic.AtomicLong()   // 转成位图并交给界面的帧
+
     private fun onFrame(r: ImageReader) {
-        val img = r.acquireLatestImage() ?: return
+        framesAvailable.incrementAndGet()
+        val wait = 1000L / previewFps - (android.os.SystemClock.uptimeMillis() - lastFrameAt)
+        if (wait > 0) {
+            // 太快了先不取。但要补一次：否则画面静止前的最后一帧会被丢掉，预览停在旧画面
+            if (!catchUpPending) {
+                catchUpPending = true
+                readerHandler?.postDelayed({ catchUpPending = false; processLatest(r) }, wait)
+            }
+            return
+        }
+        processLatest(r)
+    }
+
+    private fun processLatest(r: ImageReader) {
+        val img = try { r.acquireLatestImage() } catch (_: Exception) { null } ?: return
         try {
-            val now = System.currentTimeMillis()
-            if (now - lastFrameAt < 1000) return
-            lastFrameAt = now
+            lastFrameAt = android.os.SystemClock.uptimeMillis()
             val plane = img.planes[0]
             val rowPixels = plane.rowStride / plane.pixelStride
             val full = Bitmap.createBitmap(rowPixels, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(plane.buffer)
-            val small = Bitmap.createScaledBitmap(Bitmap.createBitmap(full, 0, 0, img.width, img.height), 540, 1200, true)
-            full.recycle()
+            val cropped = Bitmap.createBitmap(full, 0, 0, img.width, img.height)
+            if (keepFull) lastFull = cropped
+            val small = Bitmap.createScaledBitmap(cropped, 540, 1200, true)
+            if (cropped !== full) full.recycle()
             preview = small.asImageBitmap()
+            framesProcessed.incrementAndGet()
         } finally {
             img.close()
         }
+    }
+
+    /** debug：把最近一帧的全分辨率画面保存成 PNG（需要先 config keepfull=true）。 */
+    fun saveShot(file: java.io.File): Boolean {
+        val b = lastFull ?: return false
+        file.outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return true
+    }
+
+    /** debug：在虚拟屏上持续上下滑动 [seconds] 秒，统计虚拟屏产出的帧数和实际转成预览的帧数。 */
+    fun fpsTest(seconds: Int) = call("fps 测试", executor = readIo) { p ->
+        framesAvailable.set(0); framesProcessed.set(0)
+        val end = System.currentTimeMillis() + seconds * 1000L
+        var up = true
+        while (System.currentTimeMillis() < end) {
+            if (up) p.swipe(displayId, 540f, 1900f, 540f, 500f, 350) else p.swipe(displayId, 540f, 500f, 540f, 1900f, 350)
+            up = !up
+        }
+        Thread.sleep(500)
+        report("FPS 结果：${seconds}s 内虚拟屏产出 ${framesAvailable.get()} 帧（${framesAvailable.get() / seconds.toFloat()} fps），转成预览 ${framesProcessed.get()} 帧（${framesProcessed.get() / seconds.toFloat()} fps），previewFps=$previewFps")
     }
 
     private fun stopReader() {

@@ -102,6 +102,28 @@ class UiAutomationHelper {
         return if (pred(n)) n else null
     }
 
+    /** 找文案/描述包含 [needle] 的可见节点，返回它或最近的可点击祖先：区域和标签。 */
+    fun findClickableByText(displayId: Int, needle: String): Pair<AccessibilityNodeInfo, String>? {
+        for (root in windowRoots(displayId).asReversed()) {
+            val n = findFirst(root) {
+                it.isVisibleToUser && ("${it.text ?: ""} ${it.contentDescription ?: ""}").contains(needle, ignoreCase = true)
+            } ?: continue
+            var p: AccessibilityNodeInfo? = n
+            var i = 0
+            while (p != null && !p.isClickable && i++ < 6) p = p.parent
+            return (if (p != null && p.isClickable) p else n) to "${n.text ?: ""} ${n.contentDescription ?: ""}".trim()
+        }
+        return null
+    }
+
+    /** 硬拦截检查：页面级锁定 + 控件级区域。返回拦截原因，null 表示放行。 */
+    fun blockReason(displayId: Int, x: Int?, y: Int?): String? {
+        val roots = windowRoots(displayId)
+        SafetyGuard.pageLock(roots)?.let { return "页面级锁定：当前页面含「$it」，不允许点击或输入" }
+        if (x != null && y != null) SafetyGuard.blockedAt(roots, x, y)?.let { return it }
+        return null
+    }
+
     /** 界面树的文本形式：每行一个节点。 */
     fun dump(displayId: Int): String {
         val sb = StringBuilder()
