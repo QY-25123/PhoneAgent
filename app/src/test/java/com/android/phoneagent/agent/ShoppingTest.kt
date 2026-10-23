@@ -105,6 +105,8 @@ class ShoppingTest {
         assertThat(host.lines).containsExactly("删除：商品2", "「商品1」数量改为 2").inOrder()
         assertThat(host.said.single()).contains("删除：商品2")          // 改完直接告诉用户做了什么
         assertThat(confirmedAtEdit).isEqualTo(0)                           // 确认的那一刻：还没有任何点击
+        assertThat(phone.cartArmed.single().map { it.action }).containsExactly("delete", "set_quantity").inOrder()   // 只对确认过的清单布防
+        assertThat(phone.cartDisarms).isEqualTo(1)                         // 改完撤销布防
     }
 
     @Test fun cancellingTheCartCardLeavesTheCartUntouched() = runTest {

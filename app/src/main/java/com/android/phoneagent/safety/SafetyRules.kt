@@ -28,6 +28,10 @@ object SafetyRules {
         return id?.endsWith(":id/send") == true || l.equals("send", ignoreCase = true) || l == "发送"
     }
 
+    /** Amazon 购物车上改变购物车内容的控件（删除、数量加减、Save for later、Move to cart）。 */
+    fun isCartEdit(pkg: String?, label: String) =
+        pkg == "com.amazon.mShop.android.shopping" && CartControls.parse(label) != null
+
     fun isHardLabel(label: String) = HARD_LABEL.containsMatchIn(label)
     fun isHardId(id: String?) = id != null && HARD_ID.containsMatchIn(id)
     fun isLockLabel(label: String) = LOCK_LABEL.containsMatchIn(label)

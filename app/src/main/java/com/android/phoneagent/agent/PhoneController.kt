@@ -31,6 +31,11 @@ interface PhoneController {
 
     suspend fun disarmGmailSend()
 
+    /** 购物车改动的一次性放行：只有清单里的改动能执行（特权侧硬拦截），其他一律拦截。 */
+    suspend fun armCartChanges(changes: List<CartChange>)
+
+    suspend fun disarmCartChanges()
+
     suspend fun perceive(): PerceptionResult
 
     /** 执行一个动作（open_app / tap / type / scroll / back / press_enter）。元素编号以 [screen] 为准。 */

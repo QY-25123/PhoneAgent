@@ -60,6 +60,10 @@ interface IPrivileged {
     boolean armGmailSendHash(int displayId, String hash) = 26;
     void disarmGmailSend() = 27;
 
+    // 购物车改动的一次性放行：spec 每行 `action\titem\tquantity`（action 是 delete 或 set_quantity）。没布防时购物车的删除/数量控件一律拦截
+    void armCartChanges(String spec) = 28;
+    void disarmCartChanges() = 29;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

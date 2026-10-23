@@ -25,7 +25,10 @@ object SafetyGuard {
     /** 读取虚拟屏上 Gmail 草稿当前内容的哈希；由特权服务设置（读不到返回 null → 拦截）。 */
     @Volatile var draftHashProvider: (() -> String?)? = null
 
-    data class Hard(val rect: Rect, val label: String, val gmailSend: Boolean)
+    /** 购物车改动的一次性放行（用户确认的那组改动）。见 [CartGate]。 */
+    val cartGate = CartGate()
+
+    data class Hard(val rect: Rect, val label: String, val gmailSend: Boolean, val cart: Boolean = false)
 
     private fun isGmailSend(n: AccessibilityNodeInfo): Boolean {
         return SafetyRules.isGmailSend(n.packageName?.toString(), n.viewIdResourceName, (n.contentDescription ?: n.text ?: "").toString())
@@ -63,13 +66,14 @@ object SafetyGuard {
         fun walk(n: AccessibilityNodeInfo) {
             val gm = isGmailSend(n)
             // 只看屏幕上可见的控件：网页里被隐藏的 buy-now 节点高度为 0，不应该拦住它附近的正常点击
-            if (n.isVisibleToUser && (gm || isHard(n))) {
+            val cart = n.isVisibleToUser && SafetyRules.isCartEdit(n.packageName?.toString(), label(n))
+            if (n.isVisibleToUser && (gm || cart || isHard(n))) {
                 val r = Rect().also { n.getBoundsInScreen(it) }
                 var p: AccessibilityNodeInfo? = n
                 var i = 0
                 while (p != null && !p.isClickable && i++ < 6) p = p.parent
                 if (p != null && p.isClickable) r.union(Rect().also { p.getBoundsInScreen(it) })
-                out += Hard(r, label(n), gm)
+                out += Hard(r, label(n), gm, cart && !gm && !isHard(n))
             }
             for (i in 0 until n.childCount) n.getChild(i)?.let { walk(it) }
         }
@@ -81,6 +85,10 @@ object SafetyGuard {
     fun blockedAt(roots: List<AccessibilityNodeInfo>, x: Int, y: Int, consume: Boolean = true): String? {
         for (h in hardControls(roots)) {
             if (!Rect(h.rect).apply { inset(-MARGIN, -MARGIN) }.contains(x, y)) continue
+            if (h.cart) {
+                if (cartGate.check(h.label, consume)) continue
+                return "购物车改动被拦截：只有你确认过的改动才能执行（${h.label.take(40)}）"
+            }
             if (h.gmailSend) {
                 if (sendGate.isArmed()) {
                     // 内容绑定的放行：此刻页面上的草稿哈希必须和确认时一致

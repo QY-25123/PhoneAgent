@@ -144,7 +144,10 @@ class ShoppingFlow(
             if (plan.isEmpty()) host.say("没有需要改动的地方，我直接去结算。")
             else {
                 if (!host.confirmCartChanges(plan.map { it.describe() })) return ShoppingResult.Cancelled("已取消，购物车没有改动。")
-                val r = loop().run(CartEditTask(plan))
+                val r = try {
+                    phone.armCartChanges(plan)   // 特权侧只放行这组改动
+                    loop().run(CartEditTask(plan))
+                } finally { runCatching { phone.disarmCartChanges() } }
                 if (r is LoopResult.Failure) return ShoppingResult.Failed("修改购物车没能完成：${r.reason}", r.leftovers)
                 host.say("购物车已按你确认的清单修改好了：" + plan.joinToString("；") { it.describe() } + "。")   // 直接告诉用户做了什么
             }

@@ -135,6 +135,16 @@ class PrivilegedService : IPrivileged.Stub() {
 
     override fun disarmGmailSend() = com.android.phoneagent.safety.SafetyGuard.sendGate.disarm()
 
+    override fun armCartChanges(spec: String) {
+        val list = spec.lines().filter { it.isNotBlank() }.map { l ->
+            val p = l.split('\t')
+            com.android.phoneagent.safety.CartGate.Change(p.getOrElse(1) { "" }, p[0], p.getOrNull(2)?.toIntOrNull())
+        }
+        com.android.phoneagent.safety.SafetyGuard.cartGate.arm(list)
+    }
+
+    override fun disarmCartChanges() = com.android.phoneagent.safety.SafetyGuard.cartGate.disarm()
+
     override fun scroll(displayId: Int, forward: Boolean) = ui.scroll(displayId, forward)
     override fun globalBack() = ui.globalBack()
 

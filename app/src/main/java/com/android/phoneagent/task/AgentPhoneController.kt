@@ -4,6 +4,7 @@ import com.android.phoneagent.agent.Action
 import com.android.phoneagent.agent.ActionOutcome
 import com.android.phoneagent.agent.AppCatalog
 import com.android.phoneagent.agent.CalendarTask
+import com.android.phoneagent.agent.CartChange
 import com.android.phoneagent.agent.EmailTask
 import com.android.phoneagent.agent.MailIntent
 import com.android.phoneagent.agent.Direction
@@ -61,6 +62,13 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
     override suspend fun armGmailSend(hash: String): Boolean = try {
         Agent.withPriv("布防发送") { it.armGmailSendHash(displayId, hash) }
     } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) { false }
+
+    override suspend fun armCartChanges(changes: List<CartChange>) {
+        val spec = changes.joinToString("\n") { "${it.action}\t${it.item}\t${it.quantity ?: ""}" }
+        Agent.withPriv("布防购物车改动") { it.armCartChanges(spec) }
+    }
+
+    override suspend fun disarmCartChanges() { Agent.withPriv("撤销购物车布防") { it.disarmCartChanges() } }
 
     override suspend fun disarmGmailSend() { Agent.withPriv("撤销布防") { it.disarmGmailSend() } }
 

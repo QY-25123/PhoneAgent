@@ -88,6 +88,10 @@ class FakePhone(
     var disarms = 0
     override suspend fun armGmailSend(hash: String): Boolean { armed += hash; return armResult(hash) }
     override suspend fun disarmGmailSend() { disarms++ }
+    val cartArmed = ArrayList<List<CartChange>>()
+    var cartDisarms = 0
+    override suspend fun armCartChanges(changes: List<CartChange>) { cartArmed += changes }
+    override suspend fun disarmCartChanges() { cartDisarms++ }
     override suspend fun perceive(): PerceptionResult = screens(perceives++)
     override suspend fun execute(action: Action, screen: ScreenState): ActionOutcome {
         executed += action
