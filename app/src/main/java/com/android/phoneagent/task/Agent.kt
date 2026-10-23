@@ -19,6 +19,9 @@ import androidx.compose.runtime.setValue
 import com.android.phoneagent.AgentService
 import com.android.phoneagent.FloatingWindow
 import com.android.phoneagent.IPrivileged
+import com.android.phoneagent.perception.Perception
+import com.android.phoneagent.perception.PerceiveOptions
+import kotlinx.coroutines.launch as launchCoroutine
 import com.android.phoneagent.privileged.PrivilegedService
 import com.android.phoneagent.safety.UserActivityGuard
 import rikka.shizuku.Shizuku
@@ -204,6 +207,38 @@ object Agent {
 
     /** 感知：取虚拟屏的原始快照（JSON）。返回 null 表示未连接。 */
     fun snapshot(display: Int = displayId): String? = priv?.snapshotTree(display)
+
+    /** 感知：虚拟屏最新一帧的全分辨率位图（需要 [keepFull]）。 */
+    fun latestFrame(): Bitmap? = lastFull
+
+    /**
+     * debug：对虚拟屏当前页面做一次完整感知，结果写到 files/perceive/<name>.{txt,jpg}；
+     * [raw] 时另存原始快照 .snap.json 和原始截图 .png（用来录制测试样本，可能含个人信息，不要提交）。
+     */
+    fun perceiveTo(dir: java.io.File, name: String, raw: Boolean, waitForStable: Boolean = true) {
+        keepFull = true
+        val oldFps = previewFps
+        if (previewFps < 5) previewFps = 5   // 画面采集频率调高，保证拿到的是刚稳定下来的那一帧
+        perceiveScope.launchCoroutine {
+            try {
+                dir.mkdirs()
+                val res = Perception(AgentPerceptionSource(displayId)).perceive(displayId, PerceiveOptions(waitForStable = waitForStable))
+                java.io.File(dir, "$name.txt").writeText(
+                    res.text + "\n--- timings: ${res.timings}\n--- secureWindow=${res.state.secureWindow} treeEmpty=${res.state.treeEmpty} chars=${res.text.length}\n")
+                res.state.screenshotJpeg?.let { java.io.File(dir, "$name.jpg").writeBytes(it) }
+                if (raw) {
+                    snapshot(displayId)?.let { java.io.File(dir, "$name.snap.json").writeText(it) }
+                    latestFrame()?.let { b -> java.io.File(dir, "$name.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+                }
+                report("PERCEIVE $name elements=${res.state.elements.size} chars=${res.text.length} ${res.timings}")
+            } catch (e: Throwable) {
+                report("PERCEIVE $name 失败: $e")
+            } finally {
+                previewFps = oldFps
+            }
+        }
+    }
+    private val perceiveScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
 
     /** debug：取一份快照存文件，并记录耗时和大小（M1 性能测量）。 */
     fun snapshotTo(file: java.io.File, display: Int = displayId) = call("快照", executor = readIo) {

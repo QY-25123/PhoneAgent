@@ -27,6 +27,9 @@ class StableResult(
     val waitedMs: Long,
     val notes: List<String>,
     val treeEmpty: Boolean,
+    /** 最后一次读取界面树（含跨进程传输）和筛选的耗时，用来衡量「单次感知」成本（不含等待） */
+    val lastReadMs: Long = 0,
+    val lastExtractMs: Long = 0,
 )
 
 /**
@@ -48,11 +51,17 @@ class StabilityWaiter(
         var equalRun = 0
         var prevSig: String? = null
         var last: Pair<RawSnapshot?, Extraction>? = null
+        var readMs = 0L
+        var extractMs = 0L
         var settleStart = start   // 空壳阶段不计入「等页面稳定」的时限：内容出现后重新开始计时
         while (true) {
+            val t0 = clock()
             val snap = source.snapshot()
+            val t1 = clock()
             reads++
             val ext = if (snap != null) ElementExtractor.extract(snap, extract) else EMPTY
+            readMs = t1 - t0
+            extractMs = clock() - t1
             last = snap to ext
             val sig = signature(ext.elements)
             equalRun = if (sig == prevSig) equalRun + 1 else 0
@@ -60,15 +69,15 @@ class StabilityWaiter(
             val elapsed = clock() - start
             val shell = isShell(snap, ext, opts)
             val stableNow = equalRun >= opts.stableRounds - 1 && reads >= opts.stableRounds
-            if (stableNow && !shell) return finish(last, true, reads, elapsed, opts)
+            if (stableNow && !shell) return finish(last, true, reads, elapsed, opts, readMs, extractMs)
             if (shell) settleStart = clock()
             val over = if (shell) elapsed + opts.pollMs > opts.emptyRetryTotalMs else clock() - settleStart + opts.pollMs > opts.timeoutMs
-            if (over) return finish(last, stableNow, reads, elapsed, opts)
+            if (over) return finish(last, stableNow, reads, elapsed, opts, readMs, extractMs)
             sleep(opts.pollMs)
         }
     }
 
-    private fun finish(last: Pair<RawSnapshot?, Extraction>, stable: Boolean, reads: Int, waited: Long, opts: StabilityOptions): StableResult {
+    private fun finish(last: Pair<RawSnapshot?, Extraction>, stable: Boolean, reads: Int, waited: Long, opts: StabilityOptions, readMs: Long, extractMs: Long): StableResult {
         val (snap, ext) = last
         val treeEmpty = ext.elements.isEmpty()
         val notes = ArrayList<String>()
@@ -81,7 +90,7 @@ class StabilityWaiter(
             !stable -> notes.add("页面仍在变化，结果可能不完整")
         }
         if (ext.truncatedTree) notes.add("界面节点数量超过上限，已截断")
-        return StableResult(snap, ext, stable, reads, waited, notes, treeEmpty)
+        return StableResult(snap, ext, stable, reads, waited, notes, treeEmpty, readMs, extractMs)
     }
 
     private fun isShell(snap: RawSnapshot?, ext: Extraction, opts: StabilityOptions): Boolean {

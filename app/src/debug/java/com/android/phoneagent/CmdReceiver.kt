@@ -31,6 +31,9 @@ class CmdReceiver : BroadcastReceiver() {
             "text" -> Agent.setText(intent.getStringExtra("t") ?: "你好，世界")
             "dump" -> Agent.dumpTree(intent.getIntExtra("display", Agent.displayId), java.io.File(context.getExternalFilesDir(null), "tree.txt"))
             "snap" -> Agent.snapshotTo(java.io.File(context.getExternalFilesDir(null), "snap.json"), intent.getIntExtra("display", Agent.displayId))
+            "perceive" -> Agent.perceiveTo(
+                java.io.File(context.getExternalFilesDir(null), "perceive"),
+                intent.getStringExtra("name") ?: "p${System.currentTimeMillis()}", intent.getBooleanExtra("raw", false), intent.getBooleanExtra("wait", true))
             "imepolicy" -> Agent.setImePolicy(intent.getIntExtra("p", 2))
             "click" -> Agent.clickNode(intent.getIntExtra("x", 540).toFloat(), intent.getIntExtra("y", 540).toFloat())
             "scroll" -> Agent.scrollNode(intent.getBooleanExtra("fwd", true))

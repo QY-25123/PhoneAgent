@@ -193,4 +193,16 @@ class ElementExtractorTest {
         assertThat(r.truncatedTree).isTrue()
         assertThat(r.elements.single().focused).isTrue()
     }
+
+    @Test
+    fun emptyCommaRunsInDescriptionsAreCollapsed() {
+        val r = extract(window(listOf(node(0, "android.view.ViewGroup", listOf(0, 0, 1080, 200), desc = "Unread, , , Telegram, , Your Code", clk = true))))
+        assertThat(r.elements.single().desc).isEqualTo("Unread, Telegram, Your Code")
+    }
+
+    @Test
+    fun labelledNonActionableViewIsText() {
+        val r = extract(window(listOf(node(0, "android.view.View", listOf(0, 0, 500, 100), desc = "Mail, 99 new"))))
+        assertThat(r.elements.single().type).isEqualTo("Text")
+    }
 }

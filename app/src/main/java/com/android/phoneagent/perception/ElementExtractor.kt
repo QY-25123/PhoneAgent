@@ -169,7 +169,7 @@ object ElementExtractor {
             n.scrollable && !n.clickable -> "Scrollable"
             cls.contains("Button") -> "Button"
             n.clickable || n.longClickable -> "Button"
-            cls.contains("TextView") || !n.text.isNullOrBlank() -> "Text"
+            cls.contains("TextView") || !n.text.isNullOrBlank() || !n.desc.isNullOrBlank() -> "Text"
             else -> "View"
         }
     }
@@ -179,7 +179,8 @@ object ElementExtractor {
     private fun normalizeLabel(n: RawNode, merged: String?) =
         listOf(n.text, n.desc, n.hint, merged).joinToString("|") { normalizeSpace(it ?: "").lowercase() }
 
-    internal fun normalizeSpace(s: String) = s.replace(Regex("\\s+"), " ").trim()
+    internal fun normalizeSpace(s: String) =
+        s.replace(Regex("\\s+"), " ").replace(Regex("(\\s*,){2,}"), ",").trim()
 
     internal fun truncate(s: String, max: Int): String =
         if (s.length <= max) s else s.take(max) + "…(共${s.length}字)"
