@@ -81,28 +81,29 @@ class ClarifierTest {
     }
 
     @Test fun unsupportedTaskRepliesWithoutStarting() = runTest {
-        val c = clarifier(clarifyJson(type = "unsupported", reply = "这个我做不了。现在能帮你在日历里加事项。"))
+        val c = clarifier(clarifyJson(type = "unsupported", reply = "外卖这个我暂时帮不上忙。有什么别的可以帮到您的吗？祝您有愉快的一天！"))
         val r = c.clarify(user("帮我订个外卖")) as ClarifyOutcome.Reply
-        assertThat(r.text).contains("日历")
+        assertThat(r.text).contains("可以帮到您")
     }
 
     @Test fun unsupportedWithoutModelReplyFallsBackToCapabilityText() = runTest {
         val r = clarifier(clarifyJson(type = "unsupported")).clarify(user("转账")) as ClarifyOutcome.Reply
-        assertThat(r.text).contains("现在能帮你")
-        assertThat(r.text).contains("日历")
+        // 兜底回复：笼统、友好、带问候，不罗列功能
+        assertThat(r.text).contains("有什么可以帮到您")
+        assertThat(r.text).contains("愉快")
+        assertThat(r.text).doesNotContain("日历")
     }
 
     @Test fun chitchatReplies() = runTest {
-        val r = clarifier(clarifyJson(type = "chitchat", reply = "你好！我可以帮你在日历里加事项。")).clarify(user("你能做什么")) as ClarifyOutcome.Reply
-        assertThat(r.text).contains("日历")
+        val r = clarifier(clarifyJson(type = "chitchat", reply = "您好！有什么可以帮到您的吗？祝您今天心情愉快！")).clarify(user("你好")) as ClarifyOutcome.Reply
+        assertThat(r.text).contains("有什么可以帮到您")
     }
 
     @Test fun recognizedButNotYetEnabledKindsSayTheyAreInDevelopment() = runTest {
         val r = clarifier(clarifyJson(type = "email")).clarify(user("给 Alice 发邮件")) as ClarifyOutcome.Reply
-        assertThat(r.text).contains("还在开发中")
-        assertThat(r.text).contains("日历")
+        assertThat(r.text).contains("可以帮到您")
         val s = clarifier(clarifyJson(type = "shopping")).clarify(user("购物车")) as ClarifyOutcome.Reply
-        assertThat(s.text).contains("还在开发中")
+        assertThat(s.text).contains("可以帮到您")
     }
 
     @Test fun pastDateIsAskedAgain() = runTest {
@@ -218,7 +219,7 @@ class ClarifierTest {
 
     @Test fun emailKindIsRepliedAsInDevelopmentWhenNotEnabled() = runTest {
         val r = clarifier(clarifyJson(type = "email")).clarify(user("发邮件")) as ClarifyOutcome.Reply
-        assertThat(r.text).contains("还在开发中")
+        assertThat(r.text).contains("可以帮到您")
     }
 
     @Test fun emailPromptIsInTheSystemPromptWithExamples() = runTest {
@@ -237,5 +238,14 @@ class ClarifierTest {
         assertThat(t.matches(com.android.phoneagent.perception.Draft(listOf("qijie_jerry@163.com"), t.subject, "别的正文"))).isFalse()
         assertThat(t.matches(null)).isFalse()
         assertThat(EmailTask("Alice", "s", "b").matches(com.android.phoneagent.perception.Draft(listOf("alice@x.com"), "s", "b"))).isFalse()   // 只有名字不做本地核对
+    }
+
+    @Test fun promptAsksForGeneralFriendlyRepliesWithoutListingFeatures() = runTest {
+        val model = FakeModel(listOf(clarifyJson(type = "chitchat", reply = "您好！")))
+        Clarifier(model, clock = { NOW }).clarify(user("你好"))
+        val sys = model.requests.single().system
+        assertThat(sys).contains("不要罗列")
+        assertThat(sys).contains("有什么可以帮到您的吗")
+        assertThat(sys).contains("愉快的美式问候")
     }
 }
