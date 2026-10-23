@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// 开发用 Claude API Key：只从 local.properties（不进 Git）读取，缺失时为空字符串，构建不失败。
+// 只注入 debug 构建；release 不打进包（发布版由用户在设置里输入，M5）。
+val claudeApiKey: String = Properties().let { props ->
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { props.load(it) }
+    props.getProperty("CLAUDE_API_KEY", "").trim()
 }
 
 android {
@@ -20,7 +29,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "CLAUDE_API_KEY", "\"$claudeApiKey\"")
+        }
         release {
+            buildConfigField("String", "CLAUDE_API_KEY", "\"\"")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
@@ -34,6 +47,10 @@ android {
     buildFeatures {
         compose = true
         aidl = true
+        buildConfig = true
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -51,6 +68,10 @@ dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
+    testImplementation(libs.truth)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.json)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
