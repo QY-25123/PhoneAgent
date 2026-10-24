@@ -14,3 +14,6 @@
 .cxx
 local.properties
 /local-samples/
+
+# 本地构建产物（debug APK 里带着 API Key，不能提交）
+/dist/

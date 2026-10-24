@@ -206,3 +206,21 @@ sealed interface TaskState {
 - 单元测试 63 个全绿（感知相关 60 个，含 7 个真机样本的关键元素验收）；`regress.sh` 全 PASS。
 - 单次感知（不含等待稳定）实测 32～83ms，目标 <1s；详见 `docs/perception-samples.md`。
 - 标注截图和文本结果：`docs/perception/`（由脱敏样本离线生成，`scripts/m1_samples.sh` 可重新生成）。
+
+# M2～M5 完成记录（2026-10-23，MVP）
+
+**M2 澄清 + 执行循环（日历）**：`Clarifier`（结构化输出、必填项由代码再校验、代码算好的日期对照表、8 个提示词示例、输出不合法自动重试一次）、`AgentLoop`（30 步 / 60 次调用 / 连续 3 次失败 / 连续 3 步无变化 / 同界面重复同动作都会停）、`ClaudeModelClient`（官方 Java SDK）、运行记录 `runs/<时间>/`。模型最终定为 **claude-haiku-5-5**（澄清、决策、自查）：日历循环 3～10 秒、约 $0.001～0.003 一次；Sonnet 5.5 同样任务 10～20 秒、约 $0.04。日历快速通道（意图预填 + 本地核对 + 直接保存）。T1 真实测试：Sonnet 6/6 成功；Haiku 5/5 事项创建正确（1 次自查误判，已放宽提示词）。
+
+**M3 安全（T2/T3 相关）**：
+- Gmail 发送：`ConfirmToken`（内容哈希）+ `SendGate`（一次性、120 秒、点击时再校验）+ 特权侧自己读草稿算哈希；单元测试 `SendGateTest`、`SafetyRulesTest`、`GmailDraftTest`、`EmailFlowTest`。
+- Prime 订阅按钮：文字只是 Submit 时按资源 id 拦截（`SafetyRules`），设备验证 `scripts/m1_safety_prime.sh` PASS。
+- 购物车删除 / 数量 / Save for later：`CartGate`，只放行用户确认的那组改动；单元测试 12 个；**设备验证 `scripts/m4_cart_block.sh` PASS**（未确认的 Delete 被拦截且购物车不变；确认卡片后的删除放行并完成）。
+- 下单（Buy Now / Place your order）：硬拦截 + 提交订单页页面级锁定，全程没有点过。
+
+**M4 完成验证（T2 相关）**：发送后等撤销时间结束，在「已发送」核对；重试前先查「已发送」（`EmailFlow`、`TaskCoordinator` 的 `sendAttempted`）；草稿本地核对（`EmailTask.matches`）。T2 真实测试：直接发送 2 次、修改后发送 1 次成功；取消流程不稳定，按决定不处理（known-issues 第 8 条）。
+
+**M5 界面接真实数据 + 悬浮小窗**：对话页接入 `TaskBackend` 事件流（用户气泡、追问、实时画面卡片、确认卡片、交接卡片、结果卡片），历史回放；悬浮小窗（`FloatingController`）按 PRD 7.4 状态显示，点「去回答 / 去确认 / 去处理」打开 App 并定位到卡片；实时画面每秒刷新；全屏观看修复了下滑手势连续触发导致整个 App 退出，并加「×」；backlog 的顶部遮罩、启动页名称、抽屉设置入口、文案精简都已处理；引导页设置回来自动刷新、Shizuku 未运行/未授权有明确提示。
+
+**T3 Amazon（本轮完整验证）**：搜索 AAA 电池 → 加购 → 结算（Prime 推广页点 No thanks）→ 停在提交订单页（小计 $5.29、总价 $13.48）→ 点「去完成」Amazon 移到主屏；全程没有点下单、没有订阅。测试结束后通过确认卡片流程删除了测试商品。截图 `docs/mvp/12～15`。
+
+**回归**：单元测试 220 个全过；`regress.sh` 三项 PASS。
