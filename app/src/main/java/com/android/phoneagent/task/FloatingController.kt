@@ -64,6 +64,7 @@ class FloatingController private constructor(context: Context, private val backe
             }
             is TaskEvent.ConfirmResolved -> running(stepText.ifEmpty { "继续中" })
             is TaskEvent.Handoff -> { focus = "handoff"; state = State("需要交接", "已到提交订单页", listOf(go("去处理", "handoff"), close())) }
+            is TaskEvent.HandoffDone -> { state = null; focus = null }
             is TaskEvent.Succeeded -> { focus = null; state = State("完成", e.title, listOf(close())) }
             is TaskEvent.Failed -> { focus = null; state = State("失败", e.reason.take(60), listOf(close())) }
             is TaskEvent.Stopped -> state = null

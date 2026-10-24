@@ -30,6 +30,9 @@ sealed interface TaskEvent {
     /** 用户对确认卡片做了选择（不管是点界面上的按钮，还是别的入口）：界面据此更新卡片状态、去掉按钮 */
     data class ConfirmResolved(val choice: ConfirmChoice) : TaskEvent
 
+    /** 用户点了「去完成」，Amazon 已移到主屏：界面把交接卡片置为已完成、小窗收起 */
+    data object HandoffDone : TaskEvent
+
     /** 已停在 Amazon 提交订单页：交给用户付款。用户点「去完成」后 [TaskBackend.handoff] 把页面移到主屏 */
     data class Handoff(val where: String, val summary: String) : TaskEvent
 

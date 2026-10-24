@@ -101,6 +101,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
                 }
                 if (e.choice == ConfirmChoice.SEND) liveStatus(LiveStatus.RUNNING, if (pending.kind == "cart") "正在修改购物车" else "正在发送")
             }
+            is TaskEvent.HandoffDone -> items.lastOrNull { it is ChatItem.Handoff }?.let { h -> replace(h.id) { (it as ChatItem.Handoff).copy(done = true) } }
             is TaskEvent.Handoff -> {
                 items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }
                 liveStatus(LiveStatus.DONE, e.where)

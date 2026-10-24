@@ -25,7 +25,7 @@ object CartReader {
     fun read(s: ScreenState): CartInfo {
         if (s.packageName != AppCatalog.AMAZON) return CartInfo(null, emptyList())
         val blob = s.elements.joinToString("\n") { listOfNotNull(it.text, it.desc, it.mergedText).joinToString(" ") }
-        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull() ?: if (blob.contains("Your Amazon Cart is empty", ignoreCase = true)) 0 else null
+        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull() ?: if (Regex("Your Amazon Cart is empty|was removed from (your )?(Shopping )?Cart|Subtotal \\(0 items?\\)", RegexOption.IGNORE_CASE).containsMatchIn(blob)) 0 else null
         val titles = s.elements.mapNotNull { e -> (e.desc ?: e.text)?.takeIf { it.startsWith("Delete ") && ElementAction.CLICK in e.actions }?.removePrefix("Delete ")?.take(50) }.distinct()
         return CartInfo(n, titles)
     }

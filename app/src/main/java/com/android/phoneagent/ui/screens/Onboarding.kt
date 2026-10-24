@@ -79,6 +79,13 @@ fun OnboardingScreen(onFinish: (name: String, avatar: Int) -> Unit, startStep: I
     var avatar by remember { mutableIntStateOf(previewAvatar) }
     var tick by remember { mutableIntStateOf(0) }   // 重新检查
     val notifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { tick++ }
+    // 从系统设置、Shizuku 回来时自动刷新状态（不用再点「重新检查」）
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
 
     Column(
         Modifier
@@ -131,8 +138,12 @@ fun OnboardingScreen(onFinish: (name: String, avatar: Int) -> Unit, startStep: I
             1 -> {
                 val s = remember(tick) { SystemStatus.shizuku() }
                 PermissionStep(
-                    AppIcons.shield, "连接 Shizuku",
-                    "我靠 Shizuku 获得的权限在后台虚拟屏上操作应用。请先安装并启动 Shizuku，再给我授权。手机重启后需要重新启动一次。",
+                    AppIcons.shield, if (s == 0) "Shizuku 还没有运行" else "连接 Shizuku",
+                    when (s) {
+                        0 -> "没有检测到 Shizuku 在运行，我没法在后台操作应用。请打开 Shizuku，按它的提示启动（无线调试或 adb 都可以），启动后回到这里，状态会自动刷新。手机重启后需要重新启动一次。"
+                        1 -> "Shizuku 已经在运行，但还没有授权给我。点下面的「授权」，在弹窗里选择允许。"
+                        else -> "Shizuku 已连接，可以继续。"
+                    },
                     status = "状态：${SystemStatus.shizukuText(s)}", ok = s == 2,
                 )
             }
@@ -159,8 +170,14 @@ fun OnboardingScreen(onFinish: (name: String, avatar: Int) -> Unit, startStep: I
             when (step) {
                 0 -> PillButton("下一步", { step = 1 }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary, enabled = name.isNotBlank())
                 1 -> {
+                    val s = remember(tick) { SystemStatus.shizuku() }
+                    if (s == 0) PillButton("打开 Shizuku", {
+                        val i = ctx.packageManager.getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                        if (i != null) ctx.startActivity(i) else android.widget.Toast.makeText(ctx, "没有找到 Shizuku 应用，请先安装", android.widget.Toast.LENGTH_LONG).show()
+                    }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+                    if (s == 1) PillButton("授权", { runCatching { rikka.shizuku.Shizuku.requestPermission(0) }; tick++ }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
                     PillButton("重新检查", { tick++ }, Modifier.fillMaxWidth())
-                    PillButton("下一步", { step = 2 }, Modifier.fillMaxWidth(), kind = ButtonKind.Primary)
+                    PillButton(if (s == 2) "下一步" else "先跳过", { step = 2 }, Modifier.fillMaxWidth(), kind = if (s == 2) ButtonKind.Primary else ButtonKind.Secondary)
                 }
                 2 -> {
                     PillButton("允许通知", { if (Build.VERSION.SDK_INT >= 33) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) else tick++ }, Modifier.fillMaxWidth())

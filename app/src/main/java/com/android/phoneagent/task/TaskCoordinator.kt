@@ -116,6 +116,7 @@ class TaskCoordinator(
         scope.launch {
             handoffPending = false
             withContext(NonCancellable) { env.handoffToMain() }
+            emit(TaskEvent.HandoffDone)
             emit(TaskEvent.AgentSaid("已打开 Amazon，下单和付款请你来完成。"))
         }
     }
@@ -140,6 +141,7 @@ class TaskCoordinator(
             is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
             is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject}"
             is TaskEvent.ConfirmResolved -> "确认卡片已选择：${e.choice}"
+            is TaskEvent.HandoffDone -> "交接完成"
             is TaskEvent.Handoff -> "交接：${e.where}｜${e.summary}"
             is TaskEvent.Succeeded -> "成功：${e.title} ${e.detail}"
             is TaskEvent.Failed -> "失败：${e.reason}"

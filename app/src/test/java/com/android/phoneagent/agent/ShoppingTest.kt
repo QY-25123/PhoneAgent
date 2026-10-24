@@ -45,6 +45,12 @@ class ShoppingTest {
         assertThat(CartReader.read(cartScreen(1).state).itemCount).isEqualTo(1)
     }
 
+    @Test fun justDeletedLastItemCountsAsAnEmptyCart() {
+        val s = cartScreen(1).state
+        val removed = s.elements.map { it.copy(text = null, desc = null) } + s.elements.first().copy(index = 99, text = "WINSLER AAA was removed from Shopping Cart.")
+        assertThat(CartReader.read(com.android.phoneagent.perception.ScreenState(2, AppCatalog.AMAZON, "Amazon", 1080, 2400, 0, removed)).itemCount).isEqualTo(0)
+    }
+
     @Test fun orderPageIsRecognizedAndSummarized() {
         assertThat(CartReader.isOrderPage(orderScreen().state)).isTrue()
         assertThat(CartReader.isOrderPage(cartScreen().state)).isFalse()
