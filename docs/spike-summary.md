@@ -4,7 +4,7 @@
 
 - **验证环境**：Android Studio 模拟器 Pixel 8，Android 14（API 34，arm64），带 Google Play；Shizuku 13.1.5，通过 adb 启动。
 - **技术栈**：Kotlin + Jetpack Compose + Shizuku（api/provider），无 hiddenapibypass。
-- **代码位置**：`app/src/main/java/com/android/phoneagent/`（`priv/` 是运行在 shell 进程里的特权代码）；回归脚本 `scripts/`；实验记录 `docs/ime-experiments.md`；已知问题 `docs/known-issues.md`。
+- **代码位置**：`app/src/main/java/com/android/phoneagent/`（`priv/` 是运行在 shell 进程里的特权代码）；回归脚本 `scripts/`；实验记录 `docs/ime-experiments.md`；设计说明与后续规划 `docs/known-issues.md`。
 - **总体结论**：**可行，全部能力验证可用。** 用户键盘/输入目标的隔离靠创建虚拟屏时的 `VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED` 标志解决，不需要让 agent 避让用户（避让保留为默认关闭的安全开关）。
 
 ---
@@ -101,7 +101,7 @@
 ### 4.1 键盘/输入目标隔离依赖 STEAL_TOP_FOCUS_DISABLED 标志
 - **问题根因**：Android 只有一个输入法实例，只有一个「top focused display」。虚拟屏上任何 Activity 被启动或获得焦点（`am start --display`、触摸、语义点击引起的页面跳转），top focused display 就变成虚拟屏，主屏窗口失去焦点，系统随之收起用户的键盘，或把输入连接交给虚拟屏里的 App。`OWN_FOCUS` 只隔离窗口焦点，不隔离这件事；IME 策略 `HIDE` 只能避免连接被抢，不能避免键盘被收起（两者只能二选一）。
 - **解决**：创建虚拟屏时加 `STEAL_TOP_FOCUS_DISABLED` 标志，从源头阻止（见 2.8）。**不需要 agent 避让用户**。
-- **限制**：这是 Android 14 的隐藏常量，只在模拟器上验证；低版本没有，厂商 ROM 未知。标志不可用时，后备方案是打开「用户打字时暂停」开关，但那样不能保证键盘不被收起（见 `docs/known-issues.md` 第 6、7 条）。
+- **限制**：这是 Android 14 的隐藏常量，只在模拟器上验证；低版本没有，厂商 ROM 未知。标志不可用时，后备方案是打开「用户打字时暂停」开关，但那样不能保证键盘不被收起（见 `docs/known-issues.md`「输入法隔离」「UserActivityGuard」两节）。
 - 实验数据见 `docs/ime-experiments.md`。
 
 ### 4.2 返回键必须用带 displayId 的 KeyEvent，禁用 GLOBAL_ACTION_BACK
@@ -124,7 +124,7 @@
 - 大量隐藏 API 靠反射调用（`DisplayManager` 构造函数、`InputEvent.setDisplayId`、`UiAutomation` 构造函数和 `connect`、`IWindowManager`、`IActivityTaskManager`）。API 变化会失败，需要按系统版本验证。
 
 ### 4.6 虚拟屏必须在释放前清空
-不关闭虚拟屏上的任务就释放 display，任务和窗口会残留在已销毁的 display 上；残留积累后，top focused display 曾卡在已销毁的 display 上，主屏所有窗口没有焦点，只能重启系统。现在 `release()` 会先关任务。详见 `docs/known-issues.md` 第 2 条。
+不关闭虚拟屏上的任务就释放 display，任务和窗口会残留在已销毁的 display 上；残留积累后，top focused display 曾卡在已销毁的 display 上，主屏所有窗口没有焦点，只能重启系统。现在 `release()` 会先关任务。详见 `docs/known-issues.md`「虚拟屏的释放」一节。
 
 ### 4.7 其他
 - UiAutomation 首次连接后，第一次读界面树可能还没填充，需要重试。

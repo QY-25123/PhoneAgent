@@ -12,4 +12,4 @@
 | `09_calendar_done.png` | 日历：「已完成」卡片，带日程截图和依据 |
 | `10_amazon_empty_cart.png` | Amazon：购物车是空的，直接告诉用户（没有对购物车做任何改动） |
 
-Amazon 提交订单页的交接卡片本轮没有重新拍（见 `docs/known-issues.md` 第 15 条）；设计稿见 `docs/design/screens/`。
+Amazon 提交订单页的交接卡片本轮没有重新拍（见 `docs/known-issues.md`「界面与实时画面」一节）；设计稿见 `docs/design/screens/`。
