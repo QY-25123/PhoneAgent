@@ -15,6 +15,15 @@ import com.android.phoneagent.agent.EmailFlow
 import com.android.phoneagent.agent.EmailHost
 import com.android.phoneagent.agent.EmailResult
 import com.android.phoneagent.agent.EmailTask
+import com.android.phoneagent.agent.MapsFlow
+import com.android.phoneagent.agent.MapsHost
+import com.android.phoneagent.agent.MapsResult
+import com.android.phoneagent.agent.MapsReader
+import com.android.phoneagent.agent.MapsTask
+import com.android.phoneagent.agent.WechatFlow
+import com.android.phoneagent.agent.WechatHost
+import com.android.phoneagent.agent.WechatResult
+import com.android.phoneagent.agent.WechatTask
 import com.android.phoneagent.perception.Draft
 import com.android.phoneagent.agent.LoopConfig
 import com.android.phoneagent.agent.LoopHost
@@ -78,6 +87,7 @@ class TaskCoordinator(
     private var pendingAnswer: CompletableDeferred<String>? = null
     private var pendingConfirm: CompletableDeferred<ConfirmChoice>? = null
     private var earlyInstruction: String? = null   // 确认卡片等待期间用户直接打字：当作修改要求
+    @Volatile private var handoffNote = "已打开 Amazon，下单和付款请你来完成。"
     @Volatile private var handoffPending = false   // 已停在提交订单页、虚拟屏保留着等用户点「去完成」
     private val sendAttempted = HashSet<String>()   // 点过发送的邮件（收件人|主题）：重试前必须先查「已发送」
 
@@ -117,7 +127,7 @@ class TaskCoordinator(
             handoffPending = false
             withContext(NonCancellable) { env.handoffToMain() }
             emit(TaskEvent.HandoffDone)
-            emit(TaskEvent.AgentSaid("已打开 Amazon，下单和付款请你来完成。"))
+            emit(TaskEvent.AgentSaid(handoffNote))
         }
     }
 
@@ -139,7 +149,7 @@ class TaskCoordinator(
             is TaskEvent.Ask -> "问：${e.text} 选项=${e.options}"
             is TaskEvent.Started -> "开始：${e.title}"
             is TaskEvent.Progress -> "进展 step=${e.step} ${e.did}｜${e.saw}"
-            is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject}"
+            is TaskEvent.Confirm -> "确认卡片：收件人=${e.to} 主题=${e.subject} 内容=${e.body.take(60)}"
             is TaskEvent.ConfirmResolved -> "确认卡片已选择：${e.choice}"
             is TaskEvent.HandoffDone -> "交接完成"
             is TaskEvent.Handoff -> "交接：${e.where}｜${e.summary}"
@@ -183,6 +193,18 @@ class TaskCoordinator(
                         executeEmail(o.task, log, p)
                         return
                     }
+                    is ClarifyOutcome.ReadyWechat -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        executeWechat(o.task, log, p)
+                        return
+                    }
+                    is ClarifyOutcome.ReadyMaps -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        executeMaps(o.task, log, p)
+                        return
+                    }
                     is ClarifyOutcome.ReadyShopping -> {
                         emit(TaskEvent.AgentSaid(o.restatement))
                         val p = prefetch; prefetch = null
@@ -202,6 +224,89 @@ class TaskCoordinator(
         } finally {
             prefetch?.let { p -> withContext(NonCancellable) { runCatching { p.await() }; env.release() } }
             if (session?.isCancelled != true) _busy.value = false
+        }
+    }
+
+    /** 等用户在确认卡片上选发送 / 修改 / 取消；确认期间直接打字当作修改要求。 */
+    private suspend fun awaitDecision(): ConfirmDecision {
+        val d = CompletableDeferred<ConfirmChoice>()
+        synchronized(lock) { earlyInstruction = null; pendingConfirm = d }
+        return when (d.await()) {
+            ConfirmChoice.SEND -> ConfirmDecision.Send
+            ConfirmChoice.CANCEL -> ConfirmDecision.Cancel
+            ConfirmChoice.MODIFY -> {
+                val early = synchronized(lock) { earlyInstruction.also { earlyInstruction = null } }
+                if (early != null) ConfirmDecision.Modify(early) else {
+                    emit(TaskEvent.Ask("想怎么改？", emptyList()))
+                    ConfirmDecision.Modify(awaitUser())
+                }
+            }
+        }
+    }
+
+    private suspend fun executeWechat(task: WechatTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
+        emit(TaskEvent.Started("微信 · ${task.contact}", cfg.maxSteps))
+        val frames = startFrames()
+        try {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
+            }
+            val host = object : WechatHost {
+                override fun onStep(info: StepInfo) {
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+                override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
+            }
+            val result = WechatFlow(model, phone, host, cfg, clock, log).run(task)
+            val image = env.thumbnail(EVIDENCE_W)
+            when (result) {
+                is WechatResult.Sent -> emit(TaskEvent.Succeeded("微信消息已发送给 ${result.draft.to}", "内容：${result.draft.text}",
+                    listOf(result.evidence.ifBlank { "消息出现在聊天记录里，没有发送失败的标记" }, "对方和内容与你确认的一致"), image))
+                is WechatResult.Failed -> emit(TaskEvent.Failed(result.reason, result.leftovers))
+            }
+        } finally {
+            frames.cancel()
+            withContext(NonCancellable) { env.release() }
+        }
+    }
+
+    private suspend fun executeMaps(task: MapsTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
+        emit(TaskEvent.Started("地图 · ${task.destination}", cfg.maxSteps))
+        var handedOff = false
+        val frames = startFrames()
+        try {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
+            }
+            val host = object : MapsHost {
+                override fun onStep(info: StepInfo) {
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+                override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
+            }
+            when (val r = MapsFlow(model, phone, host, cfg, clock, log).run(task)) {
+                is MapsResult.Done -> {
+                    handedOff = true; handoffPending = true
+                    handoffNote = "已打开 Google 地图。"
+                    val lines = r.rows.joinToString("\n") { row ->
+                        if (!row.available) "${row.mode.zh}：不可用"
+                        else "${row.mode.zh}：${MapsReader.fmtMinutes(row.minutes!!)}" + (row.distance?.let { " · $it" } ?: "") + (if (row.mode == r.fastest) "  ⚡最快" else "")
+                    }
+                    emit(TaskEvent.Handoff("到「${task.destination}」的路线", lines + (r.note?.let { "\n$it" } ?: ""), action = "去查看", heading = "各交通方式耗时"))
+                }
+                is MapsResult.Failed -> emit(TaskEvent.Failed(r.reason, r.leftovers))
+            }
+        } finally {
+            frames.cancel()
+            if (!handedOff) withContext(NonCancellable) { env.release() }   // 结果出来后虚拟屏保留，等用户点「去查看」
         }
     }
 
@@ -266,12 +371,6 @@ class TaskCoordinator(
                     return awaitUser()
                 }
                 override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
-                override suspend fun confirmCartChanges(lines: List<String>): Boolean {
-                    emit(TaskEvent.Confirm("Amazon 购物车", "确认修改购物车", lines.joinToString("\n") { "· $it" }, kind = "cart"))
-                    val d = CompletableDeferred<ConfirmChoice>()
-                    synchronized(lock) { earlyInstruction = null; pendingConfirm = d }
-                    return d.await() == ConfirmChoice.SEND
-                }
             }
             when (val r = ShoppingFlow(model, phone, host, cfg, clock, log).run(task)) {
                 is ShoppingResult.Handoff -> {
@@ -306,19 +405,7 @@ class TaskCoordinator(
                 override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
                 override suspend fun confirm(draft: Draft): ConfirmDecision {
                     emit(TaskEvent.Confirm(draft.to.joinToString(", "), draft.subject, draft.body))
-                    val d = CompletableDeferred<ConfirmChoice>()
-                    synchronized(lock) { earlyInstruction = null; pendingConfirm = d }
-                    return when (d.await()) {
-                        ConfirmChoice.SEND -> ConfirmDecision.Send
-                        ConfirmChoice.CANCEL -> ConfirmDecision.Cancel
-                        ConfirmChoice.MODIFY -> {
-                            val early = synchronized(lock) { earlyInstruction.also { earlyInstruction = null } }
-                            if (early != null) ConfirmDecision.Modify(early) else {
-                                emit(TaskEvent.Ask("想怎么改？", emptyList()))
-                                ConfirmDecision.Modify(awaitUser())
-                            }
-                        }
-                    }
+                    return awaitDecision()
                 }
             }
             val result = EmailFlow(model, phone, host, cfg, clock, log).run(task, checkSentFirst = key in sendAttempted)
@@ -342,7 +429,7 @@ class TaskCoordinator(
 
     companion object {
         const val MAX_CLARIFY_ROUNDS = 6
-        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|发给|购物|亚马逊|amazon|购买|买|结算|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
+        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|微信|wechat|地图|路线|多久|导航|maps|发给|购物|亚马逊|amazon|购买|买|结算|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
         private const val EVIDENCE_W = 540
     }

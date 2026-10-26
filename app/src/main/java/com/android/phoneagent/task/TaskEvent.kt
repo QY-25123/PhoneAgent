@@ -34,7 +34,7 @@ sealed interface TaskEvent {
     data object HandoffDone : TaskEvent
 
     /** 已停在 Amazon 提交订单页：交给用户付款。用户点「去完成」后 [TaskBackend.handoff] 把页面移到主屏 */
-    data class Handoff(val where: String, val summary: String) : TaskEvent
+    data class Handoff(val where: String, val summary: String, val action: String = "去完成", val heading: String = "需要你来完成") : TaskEvent
 
     data class Succeeded(val title: String, val detail: String, val evidence: List<String>, val image: Bitmap?) : TaskEvent
     data class Failed(val reason: String, val leftovers: List<String>) : TaskEvent

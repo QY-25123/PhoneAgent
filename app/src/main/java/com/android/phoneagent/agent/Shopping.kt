@@ -25,7 +25,7 @@ object CartReader {
     fun read(s: ScreenState): CartInfo {
         if (s.packageName != AppCatalog.AMAZON) return CartInfo(null, emptyList())
         val blob = s.elements.joinToString("\n") { listOfNotNull(it.text, it.desc, it.mergedText).joinToString(" ") }
-        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull() ?: if (Regex("Your Amazon Cart is empty|was removed from (your )?(Shopping )?Cart|Subtotal \\(0 items?\\)", RegexOption.IGNORE_CASE).containsMatchIn(blob)) 0 else null
+        val n = SUBTOTAL.find(blob)?.groupValues?.get(1)?.toIntOrNull() ?: if (Regex("Your (Amazon |Shopping )?Cart is empty|was removed from (your )?(Shopping )?Cart|Subtotal \\(0 items?\\)", RegexOption.IGNORE_CASE).containsMatchIn(blob)) 0 else null
         val titles = s.elements.mapNotNull { e -> (e.desc ?: e.text)?.takeIf { it.startsWith("Delete ") && ElementAction.CLICK in e.actions }?.removePrefix("Delete ")?.take(50) }.distinct()
         return CartInfo(n, titles)
     }
@@ -93,8 +93,6 @@ class CartEditTask(private val changes: List<CartChange>) : LoopTask {
 }
 
 interface ShoppingHost : LoopHost {
-    /** 购物车改动确认卡片：逐项列出改动，等用户确认或取消（true＝确认） */
-    suspend fun confirmCartChanges(lines: List<String>): Boolean
     fun say(text: String)
 }
 
@@ -129,22 +127,21 @@ class ShoppingFlow(
             val open = phone.launchAmazon(AmazonIntent.CART_URL)
             if (!open.ok) phone.openApp("amazon")
         }
-        // 购物车里有多件商品：告诉用户结算会包含全部商品，让用户选
+        // 购物车里有多件商品：告诉用户结算会包含全部商品（只告知，不再让用户确认）
         val cart = CartReader.read(phone.perceive().state)
         val n = cart.itemCount
         if (task.useCart && n == 0) return ShoppingResult.Failed("购物车是空的。告诉我想买什么。", emptyList())
         if (request == null && n != null && n >= 2) {
             val names = cart.titles.take(4).joinToString("；")
-            val a = host.askUser("结算会包含购物车里的全部 $n 件商品${if (names.isNotEmpty()) "：$names" else ""}。全部结算，还是先调整购物车？", listOf("全部结算", "调整购物车"))
-            if (a.contains("调整")) request = host.askUser("想怎么调整？例如「把 XX 删掉」「XX 数量改成 2」。", emptyList())
+            host.say("结算会包含购物车里的全部 $n 件商品${if (names.isNotEmpty()) "：$names" else ""}。")
         }
         if (request != null) {
             val plan = planCartChanges(request) ?: return ShoppingResult.Failed("没看明白要怎么改，购物车没有改动", emptyList())
             if (plan.isEmpty()) host.say("无需改动，去结算。")
             else {
-                if (!host.confirmCartChanges(plan.map { it.describe() })) return ShoppingResult.Cancelled("已取消，购物车没有改动。")
+                // 用户在原话里明确要求了这些改动，不再弹确认卡片；特权侧的拦截仍然有效：只放行这一组改动，其他一律拦
                 val r = try {
-                    phone.armCartChanges(plan)   // 特权侧只放行这组改动
+                    phone.armCartChanges(plan)
                     loop().run(CartEditTask(plan))
                 } finally { runCatching { phone.disarmCartChanges() } }
                 if (r is LoopResult.Failure) return ShoppingResult.Failed("修改购物车没能完成：${r.reason}", r.leftovers)

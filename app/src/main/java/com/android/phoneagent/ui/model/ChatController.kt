@@ -80,7 +80,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
                 steps.add(StepRecord(e.step, e.saw, e.did))
                 replace(live.id) {
                     (it as ChatItem.Live).copy(
-                        step = e.step ?: it.step, stepText = e.did, status = LiveStatus.RUNNING,
+                        step = e.step ?: it.step, stepText = "正在执行任务", status = LiveStatus.RUNNING,
                         thumbImage = e.thumb?.asImageBitmap() ?: it.thumbImage,
                     )
                 }
@@ -105,7 +105,7 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
             is TaskEvent.Handoff -> {
                 items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }
                 liveStatus(LiveStatus.DONE, e.where)
-                add(ChatItem.Handoff(id(), e.where, e.summary, false))
+                add(ChatItem.Handoff(id(), e.where, e.summary, false, e.action, e.heading))
             }
             is TaskEvent.Succeeded -> {
                 items.lastOrNull { it is ChatItem.Confirm && it.state == ConfirmState.SENDING }?.let { c -> replace(c.id) { (it as ChatItem.Confirm).copy(state = ConfirmState.SENT) } }

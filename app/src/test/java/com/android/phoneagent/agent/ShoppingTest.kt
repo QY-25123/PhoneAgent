@@ -58,13 +58,11 @@ class ShoppingTest {
     }
 
     // ---- 流程 ----
-    private class Host(private val answers: List<String> = emptyList(), private val confirm: Boolean = true) : ShoppingHost {
+    private class Host(private val answers: List<String> = emptyList()) : ShoppingHost {
         val asked = ArrayList<Pair<String, List<String>>>()
-        val confirmed = ArrayList<List<String>>()
         val said = ArrayList<String>()
         override fun onStep(info: StepInfo) {}
         override suspend fun askUser(question: String, options: List<String>): String { asked += question to options; return answers.getOrElse(asked.size - 1) { "好" } }
-        override suspend fun confirmCartChanges(lines: List<String>): Boolean { confirmed += lines; return confirm }
         override fun say(text: String) { said += text }
     }
 
@@ -83,45 +81,27 @@ class ShoppingTest {
         assertThat(phone.executed).containsExactly(Action.Tap(2))         // 只点了「Proceed to checkout」，没有任何下单动作
     }
 
-    @Test fun multipleItemsAreAnnouncedAndTheUserPicksCheckoutAll() = runTest {
+    @Test fun multipleItemsAreOnlyAnnouncedNotAsked() = runTest {
         val phone = FakePhone({ if (it < 3) cartScreen(3) else orderScreen() })
-        val host = Host(listOf("全部结算"))
+        val host = Host()
         val r = flow(FakeModel(listOf(proceed, doneOk)), phone, host).run(ShoppingTask(null, 1, true, null))
         assertThat(r).isInstanceOf(ShoppingResult.Handoff::class.java)
-        assertThat(host.asked.single().first).contains("全部 3 件商品")
-        assertThat(host.asked.single().second).containsExactly("全部结算", "调整购物车")
-        assertThat(host.confirmed).isEmpty()                               // 没有要求改购物车：不改
+        assertThat(host.asked).isEmpty()
+        assertThat(host.said.single()).contains("全部 3 件商品")
+        assertThat(phone.cartArmed).isEmpty()                              // 没有要求改购物车：不改
     }
 
-    @Test fun cartChangesAreConfirmedBeforeAnythingIsEdited() = runTest {
+    @Test fun explicitCartRequestIsArmedAndExecutedWithoutAConfirmationCard() = runTest {
         val plan = cartPlanJson(Triple("商品2", "delete", null), Triple("商品1", "set_quantity", 2))
-        var confirmedAtEdit = -1
         val phone = FakePhone({ if (it < 6) cartScreen(2) else orderScreen() })
-        val host = object : ShoppingHost {
-            val lines = ArrayList<String>()
-            override fun onStep(info: StepInfo) {}
-            override suspend fun askUser(question: String, options: List<String>) = if (options.isNotEmpty()) "调整购物车" else "把商品2删掉，商品1改成2件"
-            override suspend fun confirmCartChanges(lines: List<String>): Boolean { this.lines += lines; confirmedAtEdit = phone.executed.size; return true }
-            val said = ArrayList<String>()
-            override fun say(text: String) { said += text }
-        }
+        val host = Host()
         val model = FakeModel(listOf(plan, stepJson("tap", index = 3), stepJson("done", success = true, result = "改好了"), verifyJson(true), proceed, doneOk))
-        val r = ShoppingFlow(model, phone, host, LoopConfig(), { NOW }, NoopRunLog, sleep = {}).run(ShoppingTask(null, 1, true, null))
+        val r = flow(model, phone, host).run(ShoppingTask(null, 1, true, "把商品2删掉，商品1改成2件"))
         assertThat(r).isInstanceOf(ShoppingResult.Handoff::class.java)
-        assertThat(host.lines).containsExactly("删除：商品2", "「商品1」数量改为 2").inOrder()
-        assertThat(host.said.single()).contains("删除：商品2")          // 改完直接告诉用户做了什么
-        assertThat(confirmedAtEdit).isEqualTo(0)                           // 确认的那一刻：还没有任何点击
-        assertThat(phone.cartArmed.single().map { it.action }).containsExactly("delete", "set_quantity").inOrder()   // 只对确认过的清单布防
+        assertThat(host.asked).isEmpty()
+        assertThat(host.said.single()).contains("删除：商品2")              // 改完直接告诉用户做了什么
+        assertThat(phone.cartArmed.single().map { it.action }).containsExactly("delete", "set_quantity").inOrder()   // 只对用户要求的清单布防
         assertThat(phone.cartDisarms).isEqualTo(1)                         // 改完撤销布防
-    }
-
-    @Test fun cancellingTheCartCardLeavesTheCartUntouched() = runTest {
-        val phone = FakePhone({ cartScreen(1) })
-        val host = Host(confirm = false)
-        val plan = cartPlanJson(Triple("商品1", "delete", null))
-        val r = flow(FakeModel(listOf(plan)), phone, host).run(ShoppingTask(null, 1, true, "把商品1删掉"))
-        assertThat(r).isInstanceOf(ShoppingResult.Cancelled::class.java)
-        assertThat(phone.executed).isEmpty()
     }
 
     @Test fun anEmptyPlanSkipsEditingAndChecksOut() = runTest {
@@ -129,7 +109,7 @@ class ShoppingTest {
         val host = Host()
         val r = flow(FakeModel(listOf(cartPlanJson(), proceed, doneOk)), phone, host).run(ShoppingTask(null, 1, true, "随便改改"))
         assertThat(r).isInstanceOf(ShoppingResult.Handoff::class.java)
-        assertThat(host.confirmed).isEmpty()
+        assertThat(phone.cartArmed).isEmpty()
     }
 
     @Test fun productFlowSearchesByLinkThenChecksOut() = runTest {

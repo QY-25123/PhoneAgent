@@ -38,17 +38,7 @@ fun LiveCard(item: ChatItem.Live, onOpen: () -> Unit, onStop: () -> Unit, modifi
         trailing = { Text(item.status.label, style = AppTheme.type.label, color = statusColor(item.status)) },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
-            Box(Modifier.fillMaxWidth().clickable(onClick = onOpen), contentAlignment = Alignment.Center) {
-                if (item.thumbImage != null) Image(
-                    item.thumbImage, contentDescription = null, contentScale = ContentScale.Fit,
-                    modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
-                ) else Image(
-                    painterResource(item.thumb), contentDescription = null, contentScale = ContentScale.Fit,
-                    modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
-                )
-            }
-            CardMain(item.stepText)
-            CardSub("步骤 ${item.step}/${item.total} · 点击画面全屏观看")
+            CardSub(if (active) "正在执行任务…" else item.status.label)
             if (active) {
                 Row(Modifier.padding(top = AppTheme.space.s2)) {
                     PillButton("停止", onStop, kind = ButtonKind.Danger, icon = AppIcons.stop)
@@ -70,16 +60,17 @@ private fun statusColor(s: LiveStatus) = when (s) {
 @Composable
 fun ConfirmCard(item: ChatItem.Confirm, onSend: () -> Unit, onModify: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     val cart = item.kind == "cart"
-    StructuredCard(icon = if (cart) AppIcons.cart else AppIcons.mail, title = if (cart) "确认修改购物车" else "待发送的邮件", modifier = modifier, iconTint = AppTheme.colors.warning) {
+    val wechat = item.kind == "wechat"
+    StructuredCard(icon = if (cart) AppIcons.cart else AppIcons.mail, title = if (cart) "确认修改购物车" else if (wechat) "待发送的微信消息" else "待发送的邮件", modifier = modifier, iconTint = AppTheme.colors.warning) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             if (!cart) Column {
-                CardSub("收件人"); CardMain(item.to)
+                CardSub(if (wechat) "发给" else "收件人"); CardMain(item.to)
             }
-            if (!cart) Column {
+            if (!cart && !wechat) Column {
                 CardSub("主题"); CardMain(item.subject)
             }
             Column {
-                CardSub(if (cart) "将要做的改动" else "正文")
+                CardSub(if (cart) "将要做的改动" else if (wechat) "消息" else "正文")
                 Box(Modifier.heightIn(max = AppTheme.sizes.bodyMax).verticalScroll(rememberScrollState())) {
                     Text(item.body, style = AppTheme.type.body, color = AppTheme.colors.text)
                 }
@@ -95,7 +86,7 @@ fun ConfirmCard(item: ChatItem.Confirm, onSend: () -> Unit, onModify: () -> Unit
                 }
                 ConfirmState.SENDING -> StateLine(if (cart) "已确认，正在修改购物车…" else "已确认，正在发送…", AppTheme.colors.accent)
                 ConfirmState.SENT -> StateLine(if (cart) "已修改" else "已发送", AppTheme.colors.success)
-                ConfirmState.CANCELLED -> StateLine("已取消，草稿已丢弃", AppTheme.colors.textSecondary)
+                ConfirmState.CANCELLED -> StateLine(if (wechat) "已取消，消息没有发送" else "已取消，草稿已丢弃", AppTheme.colors.textSecondary)
                 ConfirmState.SUPERSEDED -> StateLine("已被新版本取代", AppTheme.colors.textSecondary)
             }
         }
@@ -119,28 +110,13 @@ fun SuccessCard(item: ChatItem.Success, modifier: Modifier = Modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             CardMain(item.title)
             CardSub(item.detail)
-            if (item.evidenceBitmap != null || item.evidenceImage != null) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    if (item.evidenceBitmap != null) Image(
-                        item.evidenceBitmap, contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
-                    ) else Image(
-                        painterResource(item.evidenceImage!!), contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.height(AppTheme.sizes.thumbMax).clip(AppTheme.shapes.small),
-                    )
-                }
-            }
-            if (item.evidenceLines.isNotEmpty()) {
-                CardSub("证据")
-                item.evidenceLines.forEach { Text("· $it", style = AppTheme.type.caption, color = AppTheme.colors.textSecondary) }
-            }
         }
     }
 }
 
 /** 失败结果：原因 + 可能残留的内容。 */
 @Composable
-fun FailureCard(item: ChatItem.Failure, onRetry: () -> Unit, onSteps: () -> Unit, modifier: Modifier = Modifier) {
+fun FailureCard(item: ChatItem.Failure, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     StructuredCard(icon = AppIcons.alert, title = "没能完成", modifier = modifier, iconTint = AppTheme.colors.danger) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             CardMain(item.reason)
@@ -150,7 +126,6 @@ fun FailureCard(item: ChatItem.Failure, onRetry: () -> Unit, onSteps: () -> Unit
             }
             Row(Modifier.padding(top = AppTheme.space.s2), horizontalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
                 PillButton("重试", onRetry, kind = ButtonKind.Primary)
-                PillButton("查看步骤", onSteps)
             }
         }
     }
@@ -159,14 +134,14 @@ fun FailureCard(item: ChatItem.Failure, onRetry: () -> Unit, onSteps: () -> Unit
 /** 交接结果：说明停在哪里 + 「去完成」。 */
 @Composable
 fun HandoffCard(item: ChatItem.Handoff, onGo: () -> Unit, modifier: Modifier = Modifier) {
-    StructuredCard(icon = AppIcons.handoff, title = "需要你来完成", modifier = modifier, iconTint = AppTheme.colors.warning) {
+    StructuredCard(icon = AppIcons.handoff, title = item.heading, modifier = modifier, iconTint = AppTheme.colors.warning) {
         Column(verticalArrangement = Arrangement.spacedBy(AppTheme.space.s2)) {
             CardMain(item.where)
             CardSub(item.summary)
             if (item.done) {
                 Text("已把页面移到你的屏幕", style = AppTheme.type.label, color = AppTheme.colors.success, modifier = Modifier.padding(top = AppTheme.space.s2))
             } else {
-                Row(Modifier.padding(top = AppTheme.space.s2)) { PillButton("去完成", onGo, kind = ButtonKind.Primary, icon = AppIcons.handoff) }
+                Row(Modifier.padding(top = AppTheme.space.s2)) { PillButton(item.action, onGo, kind = ButtonKind.Primary, icon = AppIcons.handoff) }
             }
         }
     }

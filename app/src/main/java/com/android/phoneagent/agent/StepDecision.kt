@@ -14,6 +14,8 @@ class StepDecision(val understanding: String, val reason: String, val action: Ac
             val action = when (val t = a.optString("type")) {
                 "open_app" -> Action.OpenApp(str("app") ?: throw ModelException("open_app 缺少 app"))
                 "tap" -> Action.Tap(int("index") ?: throw ModelException("tap 缺少 index"))
+                "paste" -> Action.Paste(a.optString("text", "").takeIf { !a.isNull("text") } ?: throw ModelException("paste 缺少 text"), int("x")?.coerceIn(0, 1000), int("y")?.coerceIn(0, 1000))
+                "tap_xy" -> Action.TapXY((int("x") ?: throw ModelException("tap_xy 缺少 x")).coerceIn(0, 1000), (int("y") ?: throw ModelException("tap_xy 缺少 y")).coerceIn(0, 1000))
                 "type" -> Action.Type(int("index") ?: throw ModelException("type 缺少 index"), a.optString("text", "").takeIf { !a.isNull("text") } ?: throw ModelException("type 缺少 text"))
                 "scroll" -> Action.Scroll(
                     when (str("direction")) { "up" -> Direction.UP; "down" -> Direction.DOWN; "left" -> Direction.LEFT; "right" -> Direction.RIGHT; else -> throw ModelException("scroll 缺少 direction") },

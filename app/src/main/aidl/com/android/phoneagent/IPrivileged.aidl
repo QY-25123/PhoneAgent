@@ -64,6 +64,13 @@ interface IPrivileged {
     void armCartChanges(String spec) = 28;
     void disarmCartChanges() = 29;
 
+    // 微信发送的内容绑定放行（同 Gmail）：特权侧自己读聊天页（对方名 + 输入框文字）算哈希，一致才布防（一次性、120 秒）
+    boolean armWechatSendHash(int displayId, String hash) = 30;
+    void disarmWechatSend() = 31;
+
+    // 界面树读不到时（微信）写文字：把 text 放进系统剪贴板，再向该屏幕注入粘贴键（调用前要先点中输入框）
+    boolean pasteText(int displayId, String text) = 32;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

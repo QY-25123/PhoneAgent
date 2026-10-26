@@ -15,6 +15,12 @@ object ConfirmToken {
         val canon = "to:$to\nsubject:$subject\nbody:$body"
         return MessageDigest.getInstance("SHA-256").digest(canon.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
+
+    /** 微信确认令牌的内容哈希：对方名 + 消息文字（空白压缩）。 */
+    fun hashWechat(d: com.android.phoneagent.perception.WechatDraft): String {
+        val canon = "wechat\nto:${d.to.replace(Regex("\\s+"), " ").trim()}\nmsg:${d.text.replace("\r\n", "\n").lines().joinToString("\n") { it.trimEnd() }.trim('\n', ' ')}"
+        return MessageDigest.getInstance("SHA-256").digest(canon.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    }
 }
 
 /**

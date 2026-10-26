@@ -50,7 +50,7 @@ sealed interface ChatItem {
 
     @Immutable data class Failure(override val id: Long, val reason: String, val residue: List<String>) : ChatItem
 
-    @Immutable data class Handoff(override val id: Long, val where: String, val summary: String, val done: Boolean) : ChatItem
+    @Immutable data class Handoff(override val id: Long, val where: String, val summary: String, val done: Boolean, val action: String = "去完成", val heading: String = "需要你来完成") : ChatItem
 }
 
 enum class LiveStatus(val label: String) {

@@ -49,11 +49,11 @@ class InputInjector {
         touch(displayId, MotionEvent.ACTION_UP, t, x2, y2)
     }
 
-    fun key(displayId: Int, keyCode: Int) {
+    fun key(displayId: Int, keyCode: Int, meta: Int = 0) {
         for (action in intArrayOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP)) {
             val now = SystemClock.uptimeMillis()
             send(
-                KeyEvent(now, now, action, keyCode, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD),
+                KeyEvent(now, now, action, keyCode, 0, meta, KeyCharacterMap.VIRTUAL_KEYBOARD, 0, 0, InputDevice.SOURCE_KEYBOARD),
                 displayId,
             )
         }

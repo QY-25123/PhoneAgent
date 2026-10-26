@@ -34,12 +34,13 @@ class PrivilegedService : IPrivileged.Stub() {
         if (out.contains("Error")) error(out.trim())
     }
 
-    /** 只放行三种意图：Amazon 链接（VIEW + https://www.amazon.com/ + -p Amazon）、日历「插入事项」（-a INSERT + content://com.android.calendar/...）和 Gmail 写邮件（-a SENDTO + mailto: + -p Gmail）；其他一律拒绝。 */
+    /** 只放行四种意图（另有 Google 地图路线链接）：Amazon 链接（VIEW + https://www.amazon.com/ + -p Amazon）、日历「插入事项」（-a INSERT + content://com.android.calendar/...）和 Gmail 写邮件（-a SENDTO + mailto: + -p Gmail）；其他一律拒绝。 */
     override fun launchIntent(displayId: Int, amArgs: Array<String>) {
         val calendarInsert = amArgs.contains("android.intent.action.INSERT") && amArgs.any { it.startsWith("content://com.android.calendar/") }
         val mailCompose = amArgs.contains("android.intent.action.SENDTO") && amArgs.any { it.startsWith("mailto:") } && amArgs.contains("com.google.android.gm")
         val amazonView = amArgs.contains("android.intent.action.VIEW") && amArgs.any { it.startsWith("https://www.amazon.com/") } && amArgs.contains("com.amazon.mShop.android.shopping")
-        require(calendarInsert || mailCompose || amazonView) { "不允许的意图" }
+        val mapsView = amArgs.contains("android.intent.action.VIEW") && amArgs.any { it.startsWith("https://www.google.com/maps/") } && amArgs.contains("com.google.android.apps.maps")
+        require(calendarInsert || mailCompose || amazonView || mapsView) { "不允许的意图" }
         val cmd = listOf("am", "start", "--display", displayId.toString(), "--activity-clear-task") + amArgs
         val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()
@@ -81,6 +82,7 @@ class PrivilegedService : IPrivileged.Stub() {
 
     override fun pressKey(displayId: Int, keyCode: Int) {
         guardPoint(displayId, null, null)
+        if (keyCode == android.view.KeyEvent.KEYCODE_ENTER) ui.blockEnter(displayId)?.let { throw SecurityException("BLOCKED $it") }
         input.key(displayId, keyCode)
     }
 
@@ -132,6 +134,57 @@ class PrivilegedService : IPrivileged.Stub() {
         com.android.phoneagent.safety.SafetyGuard.sendGate.arm(hash)
         return true
     }
+
+    private fun currentWechatHash(displayId: Int): String? = runCatching {
+        val ext = com.android.phoneagent.perception.ElementExtractor.extract(com.android.phoneagent.perception.RawSnapshot.parse(ui.snapshot(displayId)))
+        val st = com.android.phoneagent.perception.ScreenState(displayId, ext.packageName, ext.pageTitle, 1080, 2400, 0, ext.elements)
+        com.android.phoneagent.perception.WechatChat.read(st)?.let { com.android.phoneagent.safety.ConfirmToken.hashWechat(it) }
+    }.getOrNull()
+
+    override fun armWechatSendHash(displayId: Int, hash: String): Boolean {
+        val cur = currentWechatHash(displayId)
+        if (cur == null && wechatTreeEmpty(displayId)) {
+            // 像素模式：读不到界面树，没法在特权侧核对内容（由 App 侧用截图核对过）；仍然一次性、120 秒
+            com.android.phoneagent.safety.SafetyGuard.wechatHashProvider = { hash }
+            com.android.phoneagent.safety.SafetyGuard.wechatGate.arm(hash)
+            return true
+        }
+        if (cur != hash) { com.android.phoneagent.safety.SafetyGuard.wechatGate.disarm(); return false }
+        com.android.phoneagent.safety.SafetyGuard.wechatHashProvider = { currentWechatHash(displayId) }
+        com.android.phoneagent.safety.SafetyGuard.wechatGate.arm(hash)
+        return true
+    }
+
+    /** 微信的界面树读不到（根节点没有任何子节点）：只能按截图和坐标操作，发送放行改按「像素模式」处理。 */
+    private fun wechatTreeEmpty(displayId: Int): Boolean = runCatching {
+        val roots = ui.windowRoots(displayId).filter { it.packageName?.toString() == "com.tencent.mm" }
+        roots.isNotEmpty() && roots.all { it.childCount == 0 }
+    }.getOrDefault(false)
+
+    override fun pasteText(displayId: Int, text: String): Boolean {
+        guardPoint(displayId, null, null)
+        val clip = android.content.ClipData.newPlainText("pa", text)
+        val cb = Class.forName("android.content.IClipboard\$Stub").getMethod("asInterface", android.os.IBinder::class.java)
+            .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "clipboard"))!!
+        val m = cb.javaClass.methods.first { it.name == "setPrimaryClip" }
+        var strings = 0
+        val args = m.parameterTypes.map { t ->
+            when {
+                t == android.content.ClipData::class.java -> clip
+                t == String::class.java -> if (strings++ == 0) "com.android.shell" else null
+                t == Int::class.javaPrimitiveType -> 0
+                else -> null
+            }
+        }.toTypedArray()
+        m.invoke(cb, *args)
+        Thread.sleep(150)
+        // 先全选再粘贴：整个输入框的内容被替换（输入框是空的时无影响）
+        input.key(displayId, android.view.KeyEvent.KEYCODE_A, android.view.KeyEvent.META_CTRL_ON or android.view.KeyEvent.META_CTRL_LEFT_ON)
+        input.key(displayId, android.view.KeyEvent.KEYCODE_PASTE)
+        return true
+    }
+
+    override fun disarmWechatSend() = com.android.phoneagent.safety.SafetyGuard.wechatGate.disarm()
 
     override fun disarmGmailSend() = com.android.phoneagent.safety.SafetyGuard.sendGate.disarm()
 

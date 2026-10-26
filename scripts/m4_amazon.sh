@@ -15,6 +15,6 @@ handoff() { adb shell "am broadcast -a $PKG.CMD -n $PKG/.CmdReceiver --es cmd ha
   echo "  >>> 去完成：主屏前台 = $(adb shell dumpsys activity activities | grep -m1 'topResumedActivity' | sed 's/.*u0 //;s/ .*//')"; }
 for c in $CASES; do case $c in
   A) run A "帮我把购物车带到结算页" ; handoff;;
-  B) run B "在亚马逊搜 ${PRODUCT}，买一个，走到提交订单页停下，我自己付款" "全部结算" ; handoff;;
-  C) run C "用购物车里现有的商品结算，但是先把 ${PRODUCT} 那件删掉" "@SEND" ; handoff;;
+  B) run B "在亚马逊搜 ${PRODUCT}，买一个，走到提交订单页停下，我自己付款" ; handoff;;
+  C) run C "用购物车里现有的商品结算，但是先把 ${PRODUCT} 那件删掉" ; handoff;;
 esac; done

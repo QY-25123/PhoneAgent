@@ -54,8 +54,20 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
         ActionOutcome(true, "ok")
     }
 
+    override suspend fun launchMaps(url: String): ActionOutcome = run("打开地图路线") {
+        Agent.withPriv("打开地图路线", guarded = true) { it.launchIntent(displayId, com.android.phoneagent.agent.MapsIntent.args(url)) }
+        delay(3500)   // 地图加载路线要几秒，太早读到的是地图主页
+        ActionOutcome(true, "ok")
+    }
+
+    override suspend fun armWechatSend(hash: String): Boolean = try {
+        Agent.withPriv("布防微信发送") { it.armWechatSendHash(displayId, hash) }
+    } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (e: Throwable) { false }
+
+    override suspend fun disarmWechatSend() { Agent.withPriv("撤销微信布防") { it.disarmWechatSend() } }
+
     override suspend fun openApp(app: String): ActionOutcome {
-        val pkg = AppCatalog.resolve(app) ?: return ActionOutcome(false, "不允许打开「$app」：只能打开日历、Gmail、Amazon")
+        val pkg = AppCatalog.resolve(app) ?: return ActionOutcome(false, "不允许打开「$app」：只能打开日历、Gmail、Amazon、微信、地图")
         return run("打开 $pkg") { Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }; ActionOutcome(true, "ok") }
     }
 
@@ -75,7 +87,7 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
     override suspend fun execute(action: Action, screen: ScreenState): ActionOutcome {
         val out = when (action) {
             is Action.OpenApp -> {
-                val pkg = AppCatalog.resolve(action.app) ?: return ActionOutcome(false, "不允许打开「${action.app}」：只能打开日历、Gmail、Amazon")
+                val pkg = AppCatalog.resolve(action.app) ?: return ActionOutcome(false, "不允许打开「${action.app}」：只能打开日历、Gmail、Amazon、微信、地图")
                 run("打开 $pkg") { Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }; ActionOutcome(true, "ok") }
             }
             is Action.Tap -> {
@@ -91,6 +103,20 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
                     if (!semantic) Agent.withPriv("点击 #${action.index}", guarded = true) { it.tap(displayId, x, y) }
                     ActionOutcome(true, if (semantic) "语义点击" else "坐标点击")
                 }
+            }
+            is Action.TapXY -> {
+                val x = action.x / 1000f * screen.screenWidth; val y = action.y / 1000f * screen.screenHeight
+                run("点击 (${action.x},${action.y})") { Agent.withPriv("坐标点击", guarded = true) { it.tap(displayId, x, y) }; ActionOutcome(true, "坐标点击") }
+            }
+            is Action.Paste -> run("粘贴") {
+                // 带坐标：先点那个位置（输入框）让它聚焦，再粘贴
+                if (action.x != null && action.y != null) {
+                    val px = action.x / 1000f * screen.screenWidth; val py = action.y / 1000f * screen.screenHeight
+                    Agent.withPriv("点击输入框", guarded = true) { it.tap(displayId, px, py) }
+                    delay(500)
+                }
+                val ok = Agent.withPriv("粘贴", guarded = true) { it.pasteText(displayId, action.text) }
+                if (ok) ActionOutcome(true, "粘贴") else ActionOutcome(false, "粘贴失败")
             }
             is Action.Type -> {
                 val e = screen.elements.firstOrNull { it.index == action.index } ?: return ActionOutcome(false, "界面上没有编号 ${action.index} 的元素")
@@ -109,10 +135,17 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
                 val e = action.index?.let { i -> screen.elements.firstOrNull { it.index == i } }
                 val cx = (e?.bounds?.centerX ?: screen.screenWidth / 2).toFloat()
                 val cy = (e?.bounds?.centerY ?: screen.screenHeight / 2).toFloat()
+                if (action.dragSheet && e != null) {
+                    // 拉开底部面板：从面板标题行的左侧空白处往上拖（起点在按钮或标签条上不会拖动面板）
+                    val sx = screen.screenWidth * 0.28f
+                    return run("拖动面板") { Agent.withPriv("拖动面板", guarded = true) { it.swipe(displayId, sx, cy, sx, (cy - 1300f).coerceAtLeast(120f), 500) }; ActionOutcome(true, "ok") }
+                        .also { if (it.ok) delay(250) }
+                }
                 val d = 500f
+                val maxY = screen.screenHeight - 40f   // 起点落在屏幕外（例如从底部面板的拖动条往上滑）时压回屏幕内
                 val (x1, y1, x2, y2) = when (action.direction) {   // 手指的轨迹与内容移动方向相反
-                    Direction.DOWN -> listOf(cx, cy + d, cx, cy - d)
-                    Direction.UP -> listOf(cx, cy - d, cx, cy + d)
+                    Direction.DOWN -> listOf(cx, (cy + d).coerceAtMost(maxY), cx, cy - d)
+                    Direction.UP -> listOf(cx, cy - d, cx, (cy + d).coerceAtMost(maxY))
                     Direction.LEFT -> listOf(cx - d, cy, cx + d, cy)
                     Direction.RIGHT -> listOf(cx + d, cy, cx - d, cy)
                 }

@@ -22,7 +22,7 @@ object ScreenshotAnnotator {
     /**
      * [elements] 的坐标是屏幕像素，屏幕宽 [screenW]（位图 [src] 可以是缩小过的，只要宽高比一样）；输出宽度 [outW]。
      */
-    fun annotate(src: Bitmap, elements: List<UiElement>, screenW: Int, outW: Int = 720, quality: Int = 70): Result {
+    fun annotate(src: Bitmap, elements: List<UiElement>, screenW: Int, outW: Int = 720, quality: Int = 70, grid: Boolean = false): Result {
         val scale = outW.toFloat() / screenW
         val outH = (src.height * outW.toFloat() / src.width).toInt()
         val bmp = Bitmap.createScaledBitmap(src, outW, outH, true).copy(Bitmap.Config.ARGB_8888, true)
@@ -53,10 +53,28 @@ object ScreenshotAnnotator {
             c.drawRect(cx, cy, cx + cw, cy + ch, chip)
             c.drawText(label, cx + 5f, cy + ch - 4f, text)
         }
+        if (grid) drawGrid(c, outW.toFloat(), outH.toFloat())
         val out = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.JPEG, quality, out)
         bmp.recycle()
         return Result(out.toByteArray(), outW, outH)
+    }
+
+    /**
+     * 界面树读不到时（微信）模型只能按位置点击：叠一层刻度网格，每 100 一条线，标注 0–1000 的比例坐标（x 标在顶部，y 标在左侧），
+     * 模型读线上的数字就能估出 tap_xy 的坐标。
+     */
+    private fun drawGrid(c: Canvas, w: Float, h: Float) {
+        val line = Paint().apply { color = 0x66FF1744; strokeWidth = 1f }
+        val txt = Paint().apply { color = 0xFFD50000.toInt(); textSize = 16f; isFakeBoldText = true; isAntiAlias = true }
+        val bg = Paint().apply { color = 0xCCFFFFFF.toInt() }
+        for (i in 1..9) {
+            val x = w * i / 10; val y = h * i / 10
+            c.drawLine(x, 0f, x, h, line); c.drawLine(0f, y, w, y, line)
+            val lx = "${i * 100}"; val tw = txt.measureText(lx)
+            c.drawRect(x - tw / 2 - 2, 0f, x + tw / 2 + 2, 18f, bg); c.drawText(lx, x - tw / 2, 14f, txt)
+            c.drawRect(0f, y - 9f, tw + 4, y + 9f, bg); c.drawText(lx, 2f, y + 6f, txt)
+        }
     }
 
     /** 截图是否全黑（安全窗口）：缩成小图用最近邻采样。 */

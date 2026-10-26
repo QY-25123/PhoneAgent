@@ -91,7 +91,7 @@ object Agent {
 
     private fun bindService() {
         val args = Shizuku.UserServiceArgs(ComponentName(appContext.packageName, PrivilegedService::class.java.name))
-            .processNameSuffix("priv").daemon(false).version(2)
+            .processNameSuffix("priv").daemon(false).version(3)
         Shizuku.bindUserService(args, conn)
         report("正在绑定 UserService…")
     }

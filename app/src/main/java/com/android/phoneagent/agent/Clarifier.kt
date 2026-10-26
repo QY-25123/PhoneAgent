@@ -58,6 +58,10 @@ sealed interface ClarifyOutcome {
     /** Amazon 任务信息齐全：复述一句话，然后开始（agent 永不付款，停在提交订单页）。 */
     data class ReadyShopping(val task: ShoppingTask, val restatement: String) : ClarifyOutcome
 
+    data class ReadyWechat(val task: WechatTask, val restatement: String) : ClarifyOutcome
+
+    data class ReadyMaps(val task: MapsTask, val restatement: String) : ClarifyOutcome
+
     /** 不开始任务，只回复（不支持的任务、闲聊、还没做的功能）。 */
     data class Reply(val text: String) : ClarifyOutcome
 
@@ -73,7 +77,7 @@ class Clarifier(
     private val model: ModelClient,
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     /** 目前能执行的任务类型（M2：只有日历）。识别出来但不能执行的会说明还在开发中 */
-    private val enabledKinds: Set<String> = setOf("calendar", "email", "shopping"),
+    private val enabledKinds: Set<String> = setOf("calendar", "email", "shopping", "wechat", "maps"),
     private val log: RunLog = NoopRunLog,
 ) {
     suspend fun clarify(dialog: List<DialogTurn>): ClarifyOutcome {
@@ -116,6 +120,8 @@ class Clarifier(
             "chitchat" -> return ClarifyOutcome.Reply(str("reply") ?: Prompts.capabilityText(enabledKinds))
             "email" -> if (kind in enabledKinds) return decideEmail(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "shopping" -> if (kind in enabledKinds) return decideShopping(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
+            "wechat" -> if (kind in enabledKinds) return decideWechat(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
+            "maps" -> if (kind in enabledKinds) return decideMaps(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "calendar" -> Unit
             else -> return ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
         }
@@ -154,6 +160,27 @@ class Clarifier(
         val qty = if (o.isNull("quantity")) 1 else o.optInt("quantity").coerceIn(1, 20)
         val task = ShoppingTask(if (useCart) null else product, qty, useCart, str("cart_request"))
         return ClarifyOutcome.ReadyShopping(task, task.restatement())
+    }
+
+    /** 微信：联系人和消息内容必填（内容由用户给出，或由模型按用户要求写好）。 */
+    private fun decideWechat(o: JSONObject, mappedFrom: String?, options: List<String>): ClarifyOutcome {
+        fun str(k: String) = if (o.isNull(k)) null else o.optString(k).trim().takeIf { it.isNotEmpty() }
+        val contact = str("wechat_contact")
+        val message = str("wechat_message")
+        val missing = ArrayList<String>()
+        if (contact == null) missing += "联系人"
+        if (message == null) missing += "消息内容"
+        if (missing.isNotEmpty()) return ClarifyOutcome.Ask(str("question") ?: ("还需要这几项信息：" + missing.joinToString("、") + "。"), options, mappedFrom)
+        val task = WechatTask(contact!!, message!!)
+        return ClarifyOutcome.ReadyWechat(task, task.restatement())
+    }
+
+    /** 地图：目的地必填；出发地默认当前位置，出发时间默认现在。 */
+    private fun decideMaps(o: JSONObject, mappedFrom: String?, options: List<String>): ClarifyOutcome {
+        fun str(k: String) = if (o.isNull(k)) null else o.optString(k).trim().takeIf { it.isNotEmpty() }
+        val dest = str("maps_destination") ?: return ClarifyOutcome.Ask(str("question") ?: "要去哪里？", options, mappedFrom)
+        val task = MapsTask(dest, str("maps_origin"), str("maps_departure"))
+        return ClarifyOutcome.ReadyMaps(task, task.restatement())
     }
 
     /** 邮件：收件人和「邮件要表达的内容」必填；主题和正文由模型写好（只用用户给的信息）。 */

@@ -31,12 +31,15 @@ fun clarifyJson(
     product: String? = null, useCart: Boolean? = null, quantity: Int? = null, cartRequest: String? = null,
     missing: List<String> = emptyList(), question: String? = null, options: List<String> = emptyList(),
     mappedFrom: String? = null, reply: String? = null,
+    wechatContact: String? = null, wechatMessage: String? = null, mapsDestination: String? = null, mapsOrigin: String? = null, mapsDeparture: String? = null,
 ): String = JSONObject().apply {
     put("task_type", type); put("title", title ?: JSONObject.NULL); put("date", date ?: JSONObject.NULL)
     put("start_time", start ?: JSONObject.NULL); put("duration_minutes", duration ?: JSONObject.NULL)
     put("recipient", recipient ?: JSONObject.NULL); put("email_content", content ?: JSONObject.NULL)
     put("email_subject", subject ?: JSONObject.NULL); put("email_body", body ?: JSONObject.NULL)
     put("product", product ?: JSONObject.NULL); put("use_cart", useCart ?: JSONObject.NULL); put("quantity", quantity ?: JSONObject.NULL); put("cart_request", cartRequest ?: JSONObject.NULL)
+    put("wechat_contact", wechatContact ?: JSONObject.NULL); put("wechat_message", wechatMessage ?: JSONObject.NULL)
+    put("maps_destination", mapsDestination ?: JSONObject.NULL); put("maps_origin", mapsOrigin ?: JSONObject.NULL); put("maps_departure", mapsDeparture ?: JSONObject.NULL)
     put("missing", JSONArray(missing)); put("assumed", JSONArray()); put("question", question ?: JSONObject.NULL)
     put("options", JSONArray(options)); put("mapped_from", mappedFrom ?: JSONObject.NULL); put("reply", reply ?: JSONObject.NULL)
 }.toString()
@@ -44,11 +47,11 @@ fun clarifyJson(
 fun stepJson(
     type: String, index: Int? = null, text: String? = null, app: String? = null, direction: String? = null, seconds: Int? = null,
     question: String? = null, options: List<String> = emptyList(), success: Boolean? = null, result: String? = null,
-    understanding: String = "页面理解", reason: String = "理由",
+    understanding: String = "页面理解", reason: String = "理由", x: Int? = null, y: Int? = null,
 ): String = JSONObject().apply {
     put("understanding", understanding); put("reason", reason)
     put("action", JSONObject().apply {
-        put("type", type); put("app", app ?: JSONObject.NULL); put("index", index ?: JSONObject.NULL); put("text", text ?: JSONObject.NULL)
+        put("type", type); put("app", app ?: JSONObject.NULL); put("index", index ?: JSONObject.NULL); put("x", x ?: JSONObject.NULL); put("y", y ?: JSONObject.NULL); put("text", text ?: JSONObject.NULL)
         put("direction", direction ?: JSONObject.NULL); put("seconds", seconds ?: JSONObject.NULL); put("question", question ?: JSONObject.NULL)
         put("options", JSONArray(options)); put("success", success ?: JSONObject.NULL); put("result", result ?: JSONObject.NULL)
     })
@@ -81,6 +84,13 @@ class FakePhone(
     override suspend fun launchEmailCompose(task: EmailTask): ActionOutcome { emailTask = task; return emailLaunch }
     val amazonUrls = ArrayList<String>()
     override suspend fun launchAmazon(url: String): ActionOutcome { amazonUrls += url; return ActionOutcome(true, "ok") }
+    val mapsUrls = ArrayList<String>()
+    override suspend fun launchMaps(url: String): ActionOutcome { mapsUrls += url; return ActionOutcome(true, "ok") }
+    var wechatArmResult: (String) -> Boolean = { true }
+    val wechatArmed = ArrayList<String>()
+    var wechatDisarms = 0
+    override suspend fun armWechatSend(hash: String): Boolean { wechatArmed += hash; return wechatArmResult(hash) }
+    override suspend fun disarmWechatSend() { wechatDisarms++ }
     val opened = ArrayList<String>()
     override suspend fun openApp(app: String): ActionOutcome { opened += app; return ActionOutcome(true, "ok") }
     var armResult: (String) -> Boolean = { true }

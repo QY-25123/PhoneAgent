@@ -11,6 +11,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.graphics.Bitmap
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -79,12 +81,67 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
         }
     }
 
+    // ---------------- 执行中的「实时画面」小窗：虚拟屏画面 + 「结束任务」 ----------------
+    private var liveRoot: LinearLayout? = null
+    private var liveImage: ImageView? = null
+    private val liveLp = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+        PixelFormat.TRANSLUCENT,
+    ).apply { gravity = Gravity.TOP or Gravity.END; x = px(12); y = px(96); title = "PhoneAgent Live" }
+
+    /** 显示或更新执行中的实时画面小窗：[thumb] 是虚拟屏当前画面（可为 null），[onStop] 结束任务，[onClose] 只收起小窗（任务继续），点标题或画面 [onOpen] 打开 App。 */
+    fun showLive(thumb: Bitmap?, onStop: () -> Unit, onClose: () -> Unit, onOpen: () -> Unit = {}) = main.post {
+        if (liveRoot == null) {
+            val title = TextView(ctx).apply { text = "实时画面"; setTextColor(0xFF2B3A4A.toInt()); textSize = 14f; setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }; layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f) }
+            val close = TextView(ctx).apply {
+                text = "×"; setTextColor(0xFF6B7C8F.toInt()); textSize = 20f; gravity = Gravity.CENTER
+                setPadding(px(10), 0, px(2), 0)
+                setOnClickListener { Log.i("PA", "OVERLAY_ACTION 关闭实时画面"); onClose() }
+            }
+            val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(title); addView(close) }
+            val img = ImageView(ctx).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }
+                setBackgroundColor(0xFF22303F.toInt())
+                clipToOutline = true
+                outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(v: View, o: android.graphics.Outline) = o.setRoundRect(0, 0, v.width, v.height, px(10).toFloat())
+                }
+            }
+            val stop = TextView(ctx).apply {
+                text = "结束任务"; setTextColor(Color.WHITE); textSize = 15f; gravity = Gravity.CENTER
+                setPadding(0, px(10), 0, px(10))
+                background = GradientDrawable().apply { setColor(0xFF6FA8DC.toInt()); cornerRadius = px(20).toFloat() }
+                setOnClickListener { Log.i("PA", "OVERLAY_ACTION 结束任务"); onStop() }
+            }
+            val r = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(px(10), px(8), px(10), px(10))
+                background = GradientDrawable().apply { setColor(0xF2F2F7FC.toInt()); cornerRadius = px(18).toFloat(); setStroke(px(1), 0x33000000) }
+                elevation = px(8).toFloat()
+                addView(head, LinearLayout.LayoutParams(px(168), LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(img, LinearLayout.LayoutParams(px(168), px(300)).apply { topMargin = px(6); bottomMargin = px(8) })
+                addView(stop, LinearLayout.LayoutParams(px(168), LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+            liveImage = img; liveRoot = r
+            wm.addView(r, liveLp)
+        }
+        thumb?.let { liveImage?.setImageBitmap(it) }
+    }
+
+    fun hideLive() = main.post {
+        liveRoot?.let { runCatching { wm.removeView(it) } }
+        liveRoot = null; liveImage = null
+    }
+
     fun hide() = main.post {
         root?.let { runCatching { wm.removeView(it) } }
         root = null; title = null; body = null; buttons = null
     }
 
-    val isShowing get() = root != null
+    val isShowing get() = root != null || liveRoot != null
 
     private fun dragListener() = object : View.OnTouchListener {
         private var downX = 0f; private var downY = 0f; private var startX = 0; private var startY = 0; private var moved = false

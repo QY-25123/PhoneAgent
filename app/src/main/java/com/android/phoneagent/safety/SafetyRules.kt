@@ -28,6 +28,15 @@ object SafetyRules {
         return id?.endsWith(":id/send") == true || l.equals("send", ignoreCase = true) || l == "发送"
     }
 
+    private val SEND_LABEL = Regex("^(send|发送)(\\s+(send|发送))*$", RegexOption.IGNORE_CASE)
+
+    /** 微信聊天页的「发送」按钮（文字/描述是 Send / 发送）。点它之前必须有内容绑定的确认令牌。 */
+    fun isWechatSend(pkg: String?, label: String) = pkg == "com.tencent.mm" && SEND_LABEL.matches(label.trim())
+
+    // Google 地图是只读任务：开始导航、保存地点/行程一律不允许
+    private val MAPS_FORBIDDEN = Regex("^((start|navigate|start navigation|begin)(\\s+(start|navigate|start navigation|begin))*|save\\b.*|开始|导航)$", RegexOption.IGNORE_CASE)
+    fun isMapsForbidden(pkg: String?, label: String) = pkg == "com.google.android.apps.maps" && MAPS_FORBIDDEN.matches(label.trim())
+
     /** Amazon 购物车上改变购物车内容的控件（删除、数量加减、Save for later、Move to cart）。 */
     fun isCartEdit(pkg: String?, label: String) =
         pkg == "com.amazon.mShop.android.shopping" && CartControls.parse(label) != null

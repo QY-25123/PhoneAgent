@@ -210,7 +210,7 @@ class AgentLoop(
                     }
                     selfCheckFailures++
                     history += Prompts.HistoryItem(null, decision.understanding, "声称已完成：${a.result}", "自查未通过：$info")
-                    if (selfCheckFailures >= cfg.maxSelfCheckFailures) return fail(StopKind.SELF_CHECK_FAILED, "没能确认事项已经创建：$info")
+                    if (selfCheckFailures >= cfg.maxSelfCheckFailures) return fail(StopKind.SELF_CHECK_FAILED, "没能确认任务已经完成：$info")
                 }
 
                 is Action.AskUser -> {
@@ -251,5 +251,8 @@ class AgentLoop(
         }
     }
 
-    private fun signature(p: PerceptionResult) = StabilityWaiter.signatureOf(p.state.elements)
+    // 界面树读不到时（微信）元素列表几乎是空的：用截图内容区分界面，否则「界面没变化」会误判
+    private fun signature(p: PerceptionResult) =
+        StabilityWaiter.signatureOf(p.state.elements) +
+            (if (p.state.elements.size <= 2 && p.state.screenshotJpeg != null) "|px" + java.util.Arrays.hashCode(p.state.screenshotJpeg) else "")
 }

@@ -13,6 +13,10 @@ class StepDecisionTest {
         assertThat(parse(stepJson("type", index = 3, text = "[PA测试] 评审会")).action).isEqualTo(Action.Type(3, "[PA测试] 评审会"))
         assertThat(parse(stepJson("scroll", direction = "down")).action).isEqualTo(Action.Scroll(Direction.DOWN))
         assertThat(parse(stepJson("scroll", direction = "up", index = 2)).action).isEqualTo(Action.Scroll(Direction.UP, 2))
+        assertThat(parse(stepJson("tap_xy", x = 500, y = 960)).action).isEqualTo(Action.TapXY(500, 960))
+        assertThat(parse(stepJson("tap_xy", x = 5000, y = -3)).action).isEqualTo(Action.TapXY(1000, 0))   // 超出范围压回 0–1000
+        assertThat(parse(stepJson("paste", text = "你好")).action).isEqualTo(Action.Paste("你好"))
+        assertThat(parse(stepJson("paste", text = "你好", x = 450, y = 965)).action).isEqualTo(Action.Paste("你好", 450, 965))
         assertThat(parse(stepJson("back")).action).isEqualTo(Action.Back)
         assertThat(parse(stepJson("press_enter")).action).isEqualTo(Action.PressEnter)
         assertThat(parse(stepJson("wait", seconds = 3)).action).isEqualTo(Action.Wait(3))

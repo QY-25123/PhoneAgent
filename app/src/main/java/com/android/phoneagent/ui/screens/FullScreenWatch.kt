@@ -90,7 +90,6 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
             // 明确的退出按钮：回到对话页（任务继续在后台跑，不会被停止）
             RoundIconButton(AppIcons.close, exitOnce, Modifier.padding(end = AppTheme.space.s3))
             Text(live?.status?.label ?: "没有进行中的任务", style = AppTheme.type.label, color = c.text, modifier = Modifier.weight(1f))
-            Text("步骤 ${live?.step ?: 0}/${live?.total ?: 30}", style = AppTheme.type.caption, color = c.textSecondary)
         }
         // 画面区域（约 85%）
         BoxWithConstraints(

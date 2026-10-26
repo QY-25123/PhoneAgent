@@ -172,6 +172,8 @@ class UiAutomationHelper {
     /** 硬拦截检查：页面级锁定 + 控件级区域。返回拦截原因，null 表示放行。 */
     fun armGmailSend(displayId: Int, recipient: String): Boolean = SafetyGuard.armGmailSend(windowRoots(displayId), recipient)
 
+    fun blockEnter(displayId: Int): String? = SafetyGuard.blockEnterInWechat(windowRoots(displayId))
+
     fun blockReason(displayId: Int, x: Int?, y: Int?, consume: Boolean = true): String? {
         val roots = windowRoots(displayId)
         SafetyGuard.pageLock(roots)?.let { return "页面级锁定：当前页面含「$it」，不允许点击或输入" }

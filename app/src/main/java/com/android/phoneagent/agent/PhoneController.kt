@@ -20,7 +20,15 @@ interface PhoneController {
     /** 用链接在虚拟屏打开 Amazon（搜索结果页或购物车页），只允许 https://www.amazon.com/ 开头的链接。 */
     suspend fun launchAmazon(url: String): ActionOutcome
 
-    /** 打开允许的 App（日历 / Gmail / Amazon）。 */
+    /** 用路线链接在虚拟屏打开 Google 地图，只允许 https://www.google.com/maps/ 开头的链接。 */
+    suspend fun launchMaps(url: String): ActionOutcome
+
+    /** 微信发送的内容绑定放行（同 [armGmailSend]）：特权侧自己读聊天页（对方名 + 输入框文字）算哈希，一致才布防（一次性）。 */
+    suspend fun armWechatSend(hash: String): Boolean
+
+    suspend fun disarmWechatSend()
+
+    /** 打开允许的 App（日历 / Gmail / Amazon / 微信 / 地图）。 */
     suspend fun openApp(app: String): ActionOutcome
 
     /**

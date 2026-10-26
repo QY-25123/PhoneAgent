@@ -28,6 +28,7 @@ class FloatingController private constructor(context: Context, private val backe
     private var dismissed = false
     private var foreground = false
     private var stepText = ""
+    private var lastThumb: android.graphics.Bitmap? = null
 
     init {
         scope.launch { backend.events.collect { handle(it) } }
@@ -52,8 +53,8 @@ class FloatingController private constructor(context: Context, private val backe
     private fun handle(e: TaskEvent) {
         when (e) {
             is TaskEvent.UserSaid -> { dismissed = false }
-            is TaskEvent.Started -> { dismissed = false; running(e.title) }
-            is TaskEvent.Progress -> { stepText = (e.step?.let { "第 $it 步 · " } ?: "") + e.did; running(stepText) }
+            is TaskEvent.Started -> { dismissed = false; lastThumb = null; running(e.title) }
+            is TaskEvent.Progress -> { e.thumb?.let { lastThumb = it }; stepText = "正在执行任务"; running(stepText) }
             is TaskEvent.Ask -> {
                 focus = "question"
                 state = State("需要回答", e.text, e.options.take(2).map { o -> FloatAction(o) { backend.submit(o) } } + go("去回答", "question"))
@@ -69,15 +70,22 @@ class FloatingController private constructor(context: Context, private val backe
             is TaskEvent.Failed -> { focus = null; state = State("失败", e.reason.take(60), listOf(close())) }
             is TaskEvent.Stopped -> state = null
             is TaskEvent.AgentSaid -> if (state == null || state?.heading == "完成") Unit
-            is TaskEvent.Frame -> Unit
+            is TaskEvent.Frame -> { lastThumb = e.thumb; if (state?.heading == "执行中") window.showLive(e.thumb, { backend.stop() }, { dismissed = true; render() }, { open(null) }); return }
         }
         render()
     }
 
     private fun render() {
         val s = state
-        if (foreground || s == null || dismissed || !Settings.canDrawOverlays(ctx)) window.hide()
-        else window.show(s.heading, s.text, s.actions)
+        if (s == null || dismissed || !Settings.canDrawOverlays(ctx)) { window.hide(); window.hideLive(); return }
+        if (s.heading == "执行中") {
+            // 任务在执行：不管 App 在不在前台，都显示「实时画面 + 结束任务」小窗
+            window.hide()
+            window.showLive(lastThumb, { backend.stop() }, { dismissed = true; render() }, { open(null) })
+            return
+        }
+        window.hideLive()
+        if (foreground) window.hide() else window.show(s.heading, s.text, s.actions)
     }
 
     companion object {
