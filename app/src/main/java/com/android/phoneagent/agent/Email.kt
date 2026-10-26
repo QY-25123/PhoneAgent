@@ -52,19 +52,6 @@ class ModifyDraftTask(private val current: Draft, private val instruction: Strin
         if (GmailDraft.isCompose(screen)) true to "草稿已修改" else false to "当前不是 Gmail 写邮件页"
 }
 
-/** 在「已发送」里核对邮件。 */
-class VerifySentTask(private val to: String, private val subject: String) : LoopTask {
-    override val taskText = "在 Gmail 的「已发送」文件夹里核对：发给 $to、主题为「$subject」的邮件是否已经发出"
-    override val confirmed = "收件人：$to\n主题：$subject"
-    override val leftovers = listOf("不确定邮件是否已发出，请在 Gmail 的「已发送」里查看（发给 $to，主题「$subject」）")
-    override val stepSystem = Prompts.stepSystem(Prompts.GMAIL_SENT_SECTION)
-    override val verifySystem = Prompts.VERIFY_SENT_SYSTEM
-    // 发送之后 Gmail 的任务常常已经关闭（虚拟屏全黑）：先重新打开 Gmail 再查
-    override suspend fun prelaunch(phone: PhoneController) = phone.openApp("gmail")
-    override val prelaunchOkNote = "重新打开了 Gmail（刚点过发送，撤销发送时间已过）"
-    override val prelaunchFailNote = "重新打开 Gmail"
-}
-
 /** 丢弃本次任务创建的草稿，并核对草稿箱没有残留。 */
 class DiscardDraftTask(private val subject: String) : LoopTask {
     override val taskText = "丢弃本次任务创建的 Gmail 草稿（主题「$subject」）"
@@ -108,10 +95,8 @@ interface EmailHost : LoopHost {
 
 sealed interface EmailResult {
     data class Sent(val draft: Draft, val evidence: String) : EmailResult
-    /** 重试前发现已经发出过：不再重复发送 */
-    data class AlreadySent(val evidence: String) : EmailResult
     data class Cancelled(val discarded: Boolean, val note: String) : EmailResult
-    /** [sendAttempted]：已经点过发送（不确定是否发出），重试前必须先查「已发送」 */
+    /** [sendAttempted]：已经点过发送（不确定是否发出） */
     data class Failed(val reason: String, val leftovers: List<String>, val sendAttempted: Boolean) : EmailResult
 }
 
@@ -127,18 +112,13 @@ class EmailFlow(
     private val clock: () -> java.time.ZonedDateTime = { java.time.ZonedDateTime.now() },
     private val log: RunLog = NoopRunLog,
     private val sleep: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) },
-    /** 点发送之后等「撤销发送」时间结束再去核对（Gmail 默认约 5 秒） */
-    private val undoWaitMs: Long = 7000,
+    /** 点发送之后等一会儿再看写邮件页是不是已经关闭（发出的邮件在后台走完「撤销发送」时间，不用等） */
+    private val undoWaitMs: Long = 2500,
     private val maxRevisions: Int = 5,
 ) {
     private fun loop() = AgentLoop(model, phone, host, cfg, clock, log, sleep)
 
-    suspend fun run(task: EmailTask, checkSentFirst: Boolean = false): EmailResult {
-        if (checkSentFirst) {
-            // 重试：上次可能已经点过发送。先查「已发送」，发过了就不再发（FR-CON-5）
-            val r = loop().run(VerifySentTask(task.recipient, task.subject))
-            if (r is LoopResult.Success) return EmailResult.AlreadySent(r.evidence)
-        }
+    suspend fun run(task: EmailTask): EmailResult {
         val prep = loop().run(ComposeDraftTask(task))
         if (prep is LoopResult.Failure) return EmailResult.Failed(prep.reason, prep.leftovers, sendAttempted = false)
 
@@ -181,12 +161,10 @@ class EmailFlow(
                             }
                             return EmailResult.Failed("点击发送失败：${out.message}", listOf("草稿可能还在 Gmail 里"), sendAttempted = true)
                         }
-                        sleep(undoWaitMs)   // 等「撤销发送」时间结束
-                        val v = loop().run(VerifySentTask(draft.to.firstOrNull() ?: task.recipient, draft.subject))
-                        return when (v) {
-                            is LoopResult.Success -> EmailResult.Sent(draft, v.evidence)
-                            is LoopResult.Failure -> EmailResult.Failed("已点击发送，但没能在「已发送」里确认：${v.reason}", v.leftovers, sendAttempted = true)
-                        }
+                        sleep(undoWaitMs)
+                        // 点了发送后 Gmail 会关掉写邮件页：写邮件页没了就是发出去了（不再去「已发送」里查）；还在，说明没发出
+                        return if (GmailDraft.read(phone.perceive().state) == null) EmailResult.Sent(draft, "写邮件页已关闭，邮件已发出")
+                        else EmailResult.Failed("点了发送，但写邮件页还在，邮件可能没有发出", listOf("草稿可能还在 Gmail 里"), sendAttempted = true)
                     }
                 }
             }

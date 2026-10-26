@@ -34,9 +34,9 @@ class EmailFlowTest {
         return FakePhone({ list.getOrElse(it) { last } }).also { it.armResult = arm }
     }
 
-    private val verifiedSent = listOf(stepJson("done", success = true, result = "在已发送里看到了"), verifyJson(true))
+    private val verifiedSent = listOf("{}")   // nothing is asked of the model after the send click any more
 
-    @Test fun confirmedSendIsHashCheckedArmedClickedAndVerifiedInSent() = runTest {
+    @Test fun confirmedSendIsHashCheckedArmedAndClicked() = runTest {
         val phone = phoneWith(composeOk, composeOk, composeOk)     // 预填检查、读草稿、点发送前重读
         val host = Host(listOf(ConfirmDecision.Send))
         val r = flow(FakeModel(verifiedSent), phone, host).run(task) as EmailResult.Sent
@@ -138,31 +138,18 @@ class EmailFlowTest {
         assertThat(host.said.single()).contains("拦住")
     }
 
-    @Test fun retryChecksTheSentFolderFirstAndDoesNotSendAgain() = runTest {
-        val phone = phoneWith(inbox)
-        val host = Host(listOf(ConfirmDecision.Send))
-        val r = flow(FakeModel(verifiedSent), phone, host).run(task, checkSentFirst = true)
-        assertThat(r).isInstanceOf(EmailResult.AlreadySent::class.java)
-        assertThat(phone.emailTask).isNull()          // 没有打开写邮件页
-        assertThat(host.shown).isEmpty()
-        assertThat(sendTaps(phone)).isEmpty()
+    @Test fun composePageClosedAfterClickingSendMeansSent() = runTest {
+        val phone = phoneWith(composeOk, composeOk, composeOk)   // after the click the compose page is gone (inbox)
+        val r = flow(FakeModel(listOf("{}")), phone, Host(listOf(ConfirmDecision.Send))).run(task)
+        assertThat(r).isInstanceOf(EmailResult.Sent::class.java)
+        assertThat(sendTaps(phone)).hasSize(1)
     }
 
-    @Test fun retryContinuesNormallyWhenNotFoundInSent() = runTest {
-        val phone = phoneWith(inbox, composeOk, composeOk, composeOk)
-        val model = FakeModel(listOf(stepJson("done", success = false, result = "已发送里没有"), stepJson("done", success = true, result = "ok"), verifyJson(true)))
-        val host = Host(listOf(ConfirmDecision.Cancel))
-        flow(model, phone, host).run(task, checkSentFirst = true)
-        assertThat(phone.emailTask).isEqualTo(task)    // 没找到才继续写草稿
-        assertThat(host.shown).hasSize(1)
-    }
-
-    @Test fun clickedSendButNotFoundInSentIsReportedAsPossiblySent() = runTest {
-        val phone = phoneWith(composeOk, composeOk, composeOk)
-        val model = FakeModel(listOf(stepJson("done", success = true, result = "没找到"), verifyJson(false, "已发送里没有这封"), stepJson("done", success = true, result = "没找到"), verifyJson(false, "已发送里没有这封")))
-        val r = flow(model, phone, Host(listOf(ConfirmDecision.Send))).run(task) as EmailResult.Failed
-        assertThat(r.sendAttempted).isTrue()           // 重试前必须先查已发送
-        assertThat(r.reason).contains("已发送")
+    @Test fun composePageStillOpenAfterClickingSendIsReportedAsNotSent() = runTest {
+        val phone = phoneWith(composeOk, composeOk, composeOk, last = composeOk)
+        val r = flow(FakeModel(listOf("{}")), phone, Host(listOf(ConfirmDecision.Send))).run(task) as EmailResult.Failed
+        assertThat(r.sendAttempted).isTrue()
+        assertThat(r.reason).contains("写邮件页还在")
     }
 
     @Test fun ifTheComposePageCannotBePreparedNothingIsConfirmedOrSent() = runTest {
