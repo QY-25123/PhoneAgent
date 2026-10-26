@@ -378,7 +378,8 @@ object Agent {
     }
 
     /** The SurfaceView is going away: send the display back to the ImageReader. */
-    fun routeToReader() {
+    fun routeToReader(from: android.view.SurfaceView) {
+        if (liveView !== from) return   // another SurfaceView has already taken over (e.g. overlay -> full-screen page)
         liveView = null
         readerHandler?.removeCallbacks(copyLoop)
         val r = reader ?: return

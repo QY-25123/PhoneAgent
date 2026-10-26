@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -105,15 +107,30 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
             contentAlignment = Alignment.Center,
         ) {
             if (live != null) {
-                if (live.thumbImage != null) Image(
-                    live.thumbImage, contentDescription = null, contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(AppTheme.space.s2).clip(AppTheme.shapes.small),
-                ) else Image(
+                if (live.thumbImage != null) Box(Modifier.fillMaxSize().padding(AppTheme.space.s2), contentAlignment = Alignment.Center) {
+                    // The virtual display renders straight into this SurfaceView (same as the floating window); the agent's own frames come from PixelCopy
+                    Box(Modifier.fillMaxHeight().aspectRatio(9f / 20f, matchHeightConstraintsFirst = true)) {
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                android.view.SurfaceView(ctx).apply {
+                                    holder.setFixedSize(com.android.phoneagent.task.Agent.WIDTH, com.android.phoneagent.task.Agent.HEIGHT)
+                                    holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                                        override fun surfaceCreated(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToView(this@apply) }
+                                        override fun surfaceChanged(h: android.view.SurfaceHolder, f: Int, w: Int, hh: Int) {}
+                                        override fun surfaceDestroyed(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToReader(this@apply) }
+                                    })
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                        val tap = controller.tapPoint
+                        if (tap != null) TapDot(tap.first, tap.second, pad = false)
+                    }
+                } else Image(
                     painterResource(live.thumb), contentDescription = null, contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize().padding(AppTheme.space.s2).clip(AppTheme.shapes.small),
                 )
-                val tap = controller.tapPoint
-                if (tap != null) TapDot(tap.first, tap.second)
+                if (live.thumbImage == null) { val tap = controller.tapPoint; if (tap != null) TapDot(tap.first, tap.second) }
             }
         }
         // 步骤列表（上滑展开）
@@ -146,11 +163,11 @@ fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpande
 
 /** agent 的点击位置：出现后缩放淡出。 */
 @Composable
-private fun TapDot(fx: Float, fy: Float) {
+private fun TapDot(fx: Float, fy: Float, pad: Boolean = true) {
     val c = AppTheme.colors
     val anim = remember(fx, fy) { Animatable(0f) }
     LaunchedEffect(fx, fy) { anim.animateTo(1f, tween(600)) }
-    BoxWithConstraints(Modifier.fillMaxSize().padding(AppTheme.space.s2)) {
+    BoxWithConstraints(Modifier.fillMaxSize().padding(if (pad) AppTheme.space.s2 else androidx.compose.ui.unit.Dp.Hairline)) {
         val s = AppTheme.sizes.tapDot
         Box(
             Modifier

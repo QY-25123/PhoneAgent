@@ -109,7 +109,7 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
                 holder.addCallback(object : android.view.SurfaceHolder.Callback {
                     override fun surfaceCreated(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToView(this@apply) }
                     override fun surfaceChanged(h: android.view.SurfaceHolder, f: Int, w: Int, hh: Int) {}
-                    override fun surfaceDestroyed(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToReader() }
+                    override fun surfaceDestroyed(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToReader(this@apply) }
                 })
             }
             val ring = object : View(ctx) {
