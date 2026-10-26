@@ -88,7 +88,9 @@ class TaskCoordinator(
     private val history = ArrayList<TaskEvent>()
     override fun history(): List<TaskEvent> = synchronized(history) { history.toList() }
     override fun clearHistory() {
-        if (_busy.value || handoffPending) return
+        if (_busy.value) return
+        // A previous task that ended in a hand-off keeps its virtual display waiting for the "go finish" tap: a fresh launch drops that too
+        if (handoffPending) { handoffPending = false; scope.launch { withContext(NonCancellable) { env.release() } } }
         synchronized(history) { history.clear() }
     }
     private var session: Job? = null
