@@ -32,6 +32,7 @@ fun clarifyJson(
     missing: List<String> = emptyList(), question: String? = null, options: List<String> = emptyList(),
     mappedFrom: String? = null, reply: String? = null,
     wechatContact: String? = null, wechatMessage: String? = null, mapsDestination: String? = null, mapsOrigin: String? = null, mapsDeparture: String? = null,
+    doordashRestaurant: String? = null, doordashItem: String? = null, doordashQuantity: String? = null,
 ): String = JSONObject().apply {
     put("task_type", type); put("title", title ?: JSONObject.NULL); put("date", date ?: JSONObject.NULL)
     put("start_time", start ?: JSONObject.NULL); put("duration_minutes", duration ?: JSONObject.NULL)
@@ -40,6 +41,7 @@ fun clarifyJson(
     put("product", product ?: JSONObject.NULL); put("use_cart", useCart ?: JSONObject.NULL); put("quantity", quantity ?: JSONObject.NULL); put("cart_request", cartRequest ?: JSONObject.NULL)
     put("wechat_contact", wechatContact ?: JSONObject.NULL); put("wechat_message", wechatMessage ?: JSONObject.NULL)
     put("maps_destination", mapsDestination ?: JSONObject.NULL); put("maps_origin", mapsOrigin ?: JSONObject.NULL); put("maps_departure", mapsDeparture ?: JSONObject.NULL)
+    put("doordash_restaurant", doordashRestaurant ?: ""); put("doordash_item", doordashItem ?: ""); put("doordash_quantity", doordashQuantity ?: "")
     put("missing", JSONArray(missing)); put("assumed", JSONArray()); put("question", question ?: JSONObject.NULL)
     put("options", JSONArray(options)); put("mapped_from", mappedFrom ?: JSONObject.NULL); put("reply", reply ?: JSONObject.NULL)
 }.toString()

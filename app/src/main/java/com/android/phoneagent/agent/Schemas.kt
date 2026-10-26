@@ -8,9 +8,9 @@ object Schemas {
     /** 任务澄清（PRD FR-CLR-1）。结构化输出里 anyOf/类型数组最多 16 个，所以微信/地图的字段用普通字符串，空串表示没有。 */
     val CLARIFY = """
     {"type":"object","additionalProperties":false,
-     "required":["task_type","title","date","start_time","duration_minutes","recipient","email_content","email_subject","email_body","product","use_cart","quantity","cart_request","wechat_contact","wechat_message","maps_destination","maps_origin","maps_departure","missing","assumed","question","options","mapped_from","reply"],
+     "required":["task_type","title","date","start_time","duration_minutes","recipient","email_content","email_subject","email_body","product","use_cart","quantity","cart_request","wechat_contact","wechat_message","maps_destination","maps_origin","maps_departure","doordash_restaurant","doordash_item","doordash_quantity","missing","assumed","question","options","mapped_from","reply"],
      "properties":{
-       "task_type":{"type":"string","enum":["calendar","email","shopping","wechat","maps","unsupported","chitchat"]},
+       "task_type":{"type":"string","enum":["calendar","email","shopping","wechat","maps","doordash","unsupported","chitchat"]},
        "title":${nullable("string")},
        "date":${nullable("string")},
        "start_time":${nullable("string")},
@@ -28,6 +28,9 @@ object Schemas {
        "maps_destination":{"type":"string"},
        "maps_origin":{"type":"string"},
        "maps_departure":{"type":"string"},
+       "doordash_restaurant":{"type":"string"},
+       "doordash_item":{"type":"string"},
+       "doordash_quantity":{"type":"string"},
        "missing":$STRINGS,
        "assumed":$STRINGS,
        "question":${nullable("string")},

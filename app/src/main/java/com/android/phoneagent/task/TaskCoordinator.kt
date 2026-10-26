@@ -20,6 +20,10 @@ import com.android.phoneagent.agent.MapsHost
 import com.android.phoneagent.agent.MapsResult
 import com.android.phoneagent.agent.MapsReader
 import com.android.phoneagent.agent.MapsTask
+import com.android.phoneagent.agent.DoordashFlow
+import com.android.phoneagent.agent.DoordashHost
+import com.android.phoneagent.agent.DoordashResult
+import com.android.phoneagent.agent.DoordashTask
 import com.android.phoneagent.agent.WechatFlow
 import com.android.phoneagent.agent.WechatHost
 import com.android.phoneagent.agent.WechatResult
@@ -205,6 +209,12 @@ class TaskCoordinator(
                         executeMaps(o.task, log, p)
                         return
                     }
+                    is ClarifyOutcome.ReadyDoordash -> {
+                        emit(TaskEvent.AgentSaid(o.restatement))
+                        val p = prefetch; prefetch = null
+                        executeDoordash(o.task, log, p)
+                        return
+                    }
                     is ClarifyOutcome.ReadyShopping -> {
                         emit(TaskEvent.AgentSaid(o.restatement))
                         val p = prefetch; prefetch = null
@@ -361,6 +371,38 @@ class TaskCoordinator(
         }
     }
 
+    private suspend fun executeDoordash(task: DoordashTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
+        emit(TaskEvent.Started("DoorDash · ${task.restaurant}", cfg.maxSteps))
+        var handedOff = false
+        val frames = startFrames()
+        try {
+            val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
+                emit(TaskEvent.Failed(e.message ?: "没能准备好，请确认 Shizuku 在运行", emptyList())); return
+            }
+            val host = object : DoordashHost {
+                override fun onStep(info: StepInfo) {
+                    emit(TaskEvent.Progress(info.number, cfg.maxSteps, info.saw, info.did, env.thumbnail(THUMB_W)))
+                }
+                override suspend fun askUser(question: String, options: List<String>): String {
+                    emit(TaskEvent.Ask(question, options))
+                    return awaitUser()
+                }
+                override fun say(text: String) = emit(TaskEvent.AgentSaid(text))
+            }
+            when (val r = DoordashFlow(model, phone, host, cfg, clock, log).run(task)) {
+                is DoordashResult.Handoff -> {
+                    handedOff = true; handoffPending = true
+                    handoffNote = "已打开 DoorDash，下单和付款请你来完成。"
+                    emit(TaskEvent.Handoff("已到结账页", r.summary + "。下单和付款请你来完成。"))
+                }
+                is DoordashResult.Failed -> emit(TaskEvent.Failed(r.reason, r.leftovers))
+            }
+        } finally {
+            frames.cancel()
+            if (!handedOff) withContext(NonCancellable) { env.release() }   // 交接成功时虚拟屏保留，等用户点「去完成」
+        }
+    }
+
     private suspend fun executeShopping(task: ShoppingTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("Amazon · ${task.product ?: "购物车"}", cfg.maxSteps))
         var handedOff = false
@@ -382,6 +424,7 @@ class TaskCoordinator(
             when (val r = ShoppingFlow(model, phone, host, cfg, clock, log).run(task)) {
                 is ShoppingResult.Handoff -> {
                     handedOff = true; handoffPending = true
+                    handoffNote = "已打开 Amazon，下单和付款请你来完成。"
                     emit(TaskEvent.Handoff("已到提交订单页", r.summary + "。下单和付款请你来完成。"))
                 }
                 is ShoppingResult.Cancelled -> emit(TaskEvent.Stopped(r.note))
@@ -436,7 +479,7 @@ class TaskCoordinator(
 
     companion object {
         const val MAX_CLARIFY_ROUNDS = 6
-        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|微信|wechat|地图|路线|多久|导航|maps|发给|购物|亚马逊|amazon|购买|买|结算|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
+        private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|微信|wechat|地图|路线|多久|导航|maps|发给|购物|亚马逊|amazon|购买|买|结算|外卖|点餐|doordash|wingstop|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
         private const val FRAME_W = 540   // live frames for the floating window / full-screen watch: sharper than the step thumbnails
         private const val EVIDENCE_W = 540

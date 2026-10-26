@@ -50,8 +50,8 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
         val id = Agent.displayId
         if (id >= 0) {
             val tasks = Agent.withPriv("列出任务") { it.listTasks(id) }
-            // 每行：rootId childIds 组件 visible=…；取第一个 Amazon / 地图的根任务
-            val root = tasks.lines().firstOrNull { it.contains("com.amazon.mShop") || it.contains("com.google.android.apps.maps") }?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.toIntOrNull()
+            // 每行：rootId childIds 组件 visible=…；取第一个 Amazon / 地图 / DoorDash 的根任务
+            val root = tasks.lines().firstOrNull { it.contains("com.amazon.mShop") || it.contains("com.google.android.apps.maps") || it.contains("com.dd.doordash") }?.trim()?.split(Regex("\\s+"))?.firstOrNull()?.toIntOrNull()
             if (root != null) Agent.withPriv("移到主屏") { it.moveTaskToDisplay(root, 0) }
         }
         release()

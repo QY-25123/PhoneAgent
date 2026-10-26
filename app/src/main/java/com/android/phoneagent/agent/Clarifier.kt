@@ -60,6 +60,8 @@ sealed interface ClarifyOutcome {
 
     data class ReadyWechat(val task: WechatTask, val restatement: String) : ClarifyOutcome
 
+    data class ReadyDoordash(val task: DoordashTask, val restatement: String) : ClarifyOutcome
+
     data class ReadyMaps(val task: MapsTask, val restatement: String) : ClarifyOutcome
 
     /** 不开始任务，只回复（不支持的任务、闲聊、还没做的功能）。 */
@@ -77,7 +79,7 @@ class Clarifier(
     private val model: ModelClient,
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     /** 目前能执行的任务类型（M2：只有日历）。识别出来但不能执行的会说明还在开发中 */
-    private val enabledKinds: Set<String> = setOf("calendar", "email", "shopping", "wechat", "maps"),
+    private val enabledKinds: Set<String> = setOf("calendar", "email", "shopping", "wechat", "maps", "doordash"),
     private val log: RunLog = NoopRunLog,
 ) {
     suspend fun clarify(dialog: List<DialogTurn>): ClarifyOutcome {
@@ -121,6 +123,7 @@ class Clarifier(
             "email" -> if (kind in enabledKinds) return decideEmail(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "shopping" -> if (kind in enabledKinds) return decideShopping(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "wechat" -> if (kind in enabledKinds) return decideWechat(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
+            "doordash" -> if (kind in enabledKinds) return decideDoordash(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "maps" -> if (kind in enabledKinds) return decideMaps(o, mappedFrom, options) else return ClarifyOutcome.Reply(Prompts.notYetText(kind, enabledKinds))
             "calendar" -> Unit
             else -> return ClarifyOutcome.Failed("没能理解模型的回复，请换个说法再试一次")
@@ -173,6 +176,20 @@ class Clarifier(
         if (missing.isNotEmpty()) return ClarifyOutcome.Ask(str("question") ?: ("还需要这几项信息：" + missing.joinToString("、") + "。"), options, mappedFrom)
         val task = WechatTask(contact!!, message!!)
         return ClarifyOutcome.ReadyWechat(task, task.restatement())
+    }
+
+    /** DoorDash：餐厅和菜品必填；份数默认 1。 */
+    private fun decideDoordash(o: JSONObject, mappedFrom: String?, options: List<String>): ClarifyOutcome {
+        fun str(k: String) = if (o.isNull(k)) null else o.optString(k).trim().takeIf { it.isNotEmpty() }
+        val restaurant = str("doordash_restaurant")
+        val item = str("doordash_item")
+        val missing = ArrayList<String>()
+        if (restaurant == null) missing += "餐厅"
+        if (item == null) missing += "菜品"
+        if (missing.isNotEmpty()) return ClarifyOutcome.Ask(str("question") ?: ("还需要这几项信息：" + missing.joinToString("、") + "。"), options, mappedFrom)
+        val qty = str("doordash_quantity")?.toIntOrNull()?.coerceIn(1, 10) ?: 1
+        val task = DoordashTask(restaurant!!, item!!, qty)
+        return ClarifyOutcome.ReadyDoordash(task, task.restatement())
     }
 
     /** 地图：目的地必填；出发地默认当前位置，出发时间默认现在。 */

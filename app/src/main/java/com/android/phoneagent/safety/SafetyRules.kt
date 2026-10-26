@@ -6,12 +6,12 @@ package com.android.phoneagent.safety
  */
 object SafetyRules {
     private val HARD_LABEL = Regex(
-        "buy now|立即购买|place your order|提交订单|1-click|one-click|pay now|complete purchase|" +
+        "buy now|立即购买|place your order|place order|提交订单|1-click|one-click|pay now|complete purchase|" +
             // 订阅/会员（FR-SAFE-13）：Amazon 结算途中会弹「Try Prime for Young Adults」，点了会订阅并扣费
-            "try prime|join prime|start (your )?(\\d+-day )?(free )?trial|free trial|subscribe|订阅|开通会员|开通 ?prime",
+            "try prime|join prime|(try|start|join|get)\\s+(your\\s+)?dashpass|dashpass.*(free|trial)|start (your )?(\\d+-day )?(free )?trial|free trial|subscribe|订阅|开通会员|开通 ?prime",
         RegexOption.IGNORE_CASE,
     )
-    private val LOCK_LABEL = Regex("place your order|提交订单", RegexOption.IGNORE_CASE)
+    private val LOCK_LABEL = Regex("place your order|place order|提交订单", RegexOption.IGNORE_CASE)
 
     // 网页（WebView）里控件的可见文字常常只是「Submit」，真正的含义在 DOM id 上：
     // 实测 Amazon：buy-now-button 的文字是 Submit；Prime 订阅按钮的文字也是 Submit，它的父节点 id 是 prime-signup-button / stripe-cta
