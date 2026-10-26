@@ -91,9 +91,13 @@ class WechatFlow(
             return Snap(screen, tree, WechatChat.sendIndex(screen.state)?.let { Action.Tap(it) },
                 message != null && WechatChat.sentOk(screen.state, message), WechatChat.sendFailed(screen.state), false)
         }
-        val v = WechatVision.read(model, screen, log)
+        var v = WechatVision.read(model, screen, log)
         if (v == null || !v.isChat || v.title.isEmpty()) return Snap(screen, null, null, false, v?.failedMark == true, true)
-        val send = if (v.sendX != null && v.sendY != null) Action.TapXY(v.sendX, v.sendY) else null
+        // The model sometimes cannot locate the Send button: read once more, then fall back to where WeChat puts it
+        // (the green button at the right end of the input bar, which replaces the "+" once there is text)
+        if (v.inputText.isNotEmpty() && (v.sendX == null || v.sendY == null)) v = WechatVision.read(model, screen, log) ?: v
+        val send = if (v.sendX != null && v.sendY != null) Action.TapXY(v.sendX, v.sendY)
+        else if (v.inputText.isNotEmpty()) Action.TapXY(DEFAULT_SEND_X, DEFAULT_SEND_Y) else null
         val sent = message != null && v.inputText.isEmpty() && norm(v.lastSent).contains(norm(message)) && !v.failedMark
         return Snap(screen, WechatDraft(v.title, v.inputText), send, sent, v.failedMark, true)
     }
@@ -101,7 +105,9 @@ class WechatFlow(
     private suspend fun readDraft(): WechatDraft? = snap().draft?.takeIf { it.text.isNotEmpty() }
 
     suspend fun run(task: WechatTask): WechatResult {
-        val prep = loop().run(ComposeWechatTask(task))
+        var prep = loop().run(ComposeWechatTask(task))
+        // WeChat sometimes comes up dimmed / frozen after being moved onto the virtual display: relaunching it (the prelaunch of the task) usually fixes that
+        if (prep is LoopResult.Failure && prep.kind != StopKind.BLOCKED) prep = loop().run(ComposeWechatTask(task))
         if (prep is LoopResult.Failure) return WechatResult.Failed(prep.reason, prep.leftovers)
         val draft = readDraft() ?: return WechatResult.Failed("没能从微信聊天页读取到输入框里的消息", ComposeWechatTask(task).leftovers)
         try {
@@ -128,3 +134,7 @@ class WechatFlow(
         }
     }
 }
+
+/** Fallback position (0-1000 of the screenshot) of WeChat's Send button when the model cannot find it. */
+private const val DEFAULT_SEND_X = 930
+private const val DEFAULT_SEND_Y = 965

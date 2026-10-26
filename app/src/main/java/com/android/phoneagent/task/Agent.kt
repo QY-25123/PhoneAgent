@@ -251,6 +251,7 @@ object Agent {
     /** Where the agent last tapped / dragged (fractions of the screen) and when; the live view draws a ring there for a moment. */
     class TapMark(val x: Float, val y: Float, val atMs: Long)
     @Volatile var lastTap: TapMark? = null
+    const val TAP_MARK_MS = 700L
 
     /**
      * debug：对虚拟屏当前页面做一次完整感知，结果写到 files/perceive/<name>.{txt,jpg}；

@@ -186,7 +186,7 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
 
     private companion object {
         /** Demo pacing: show the target for a moment before acting, and pause after acting. */
-        const val BEFORE_ACTION_MS = 500L
+        const val BEFORE_ACTION_MS = 300L
         const val AFTER_ACTION_MS = 900L
         const val WECHAT_COLD_START_MS = 6000L
     }

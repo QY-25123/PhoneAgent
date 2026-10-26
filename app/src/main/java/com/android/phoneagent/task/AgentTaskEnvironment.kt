@@ -24,7 +24,7 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
     }
 
     override fun thumbnail(width: Int): Bitmap? {
-        val ring = Agent.lastTap?.takeIf { System.currentTimeMillis() - it.atMs < 2200 }
+        val ring = Agent.lastTap?.takeIf { System.currentTimeMillis() - it.atMs < Agent.TAP_MARK_MS }
         val live = Agent.liveFrame
         // Fast path: the frame is already 540 wide and there is no tap ring to draw, so share it as it is
         if (live != null && width == live.width && ring == null) return live
@@ -33,10 +33,13 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
         // Show where the agent is about to tap / has just tapped, so the live view makes the action visible
         ring?.let { m ->
             val c = android.graphics.Canvas(bmp)
-            val r = bmp.width * 0.07f
-            val ringPaint = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = bmp.width * 0.012f; color = 0xFFFF1744.toInt(); isAntiAlias = true }
-            val dot = android.graphics.Paint().apply { color = 0x66FF1744; isAntiAlias = true }
-            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, dot)
+            // A light touch indicator: a small soft white ring that fades out, like the touch ripple on a screen recording
+            val age = (System.currentTimeMillis() - m.atMs).coerceAtLeast(0).toFloat() / Agent.TAP_MARK_MS
+            val alpha = ((1f - age) * 200).toInt().coerceIn(0, 200)
+            val r = bmp.width * (0.025f + 0.02f * age)
+            val ringPaint = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = bmp.width * 0.006f; color = android.graphics.Color.argb(alpha, 255, 255, 255); isAntiAlias = true }
+            val fill = android.graphics.Paint().apply { color = android.graphics.Color.argb(alpha / 3, 60, 60, 60); isAntiAlias = true }
+            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, fill)
             c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, ringPaint)
         }
         return bmp

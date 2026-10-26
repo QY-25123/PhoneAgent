@@ -353,7 +353,7 @@ class TaskCoordinator(
             kotlinx.coroutines.delay(frameIntervalMs)
             // Only push when the display produced a new frame (or a tap ring is animating): no point re-sending the same picture
             val seq = Agent.framesProcessed.get()
-            val ringOn = Agent.lastTap?.let { System.currentTimeMillis() - it.atMs < 2200 } == true
+            val ringOn = Agent.lastTap?.let { System.currentTimeMillis() - it.atMs < Agent.TAP_MARK_MS } == true
             if (seq != lastSeq || ringOn) {
                 lastSeq = seq
                 env.thumbnail(FRAME_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
