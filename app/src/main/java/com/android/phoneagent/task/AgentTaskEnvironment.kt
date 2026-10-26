@@ -25,7 +25,17 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
 
     override fun thumbnail(width: Int): Bitmap? {
         val f = Agent.latestFrame() ?: return null
-        return Bitmap.createScaledBitmap(f, width, f.height * width / f.width, true)
+        val bmp = Bitmap.createScaledBitmap(f, width, f.height * width / f.width, true).copy(Bitmap.Config.ARGB_8888, true)
+        // Show where the agent is about to tap / has just tapped, so the live view makes the action visible
+        Agent.lastTap?.takeIf { System.currentTimeMillis() - it.atMs < 2200 }?.let { m ->
+            val c = android.graphics.Canvas(bmp)
+            val r = bmp.width * 0.07f
+            val ring = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = bmp.width * 0.012f; color = 0xFFFF1744.toInt(); isAntiAlias = true }
+            val dot = android.graphics.Paint().apply { color = 0x66FF1744; isAntiAlias = true }
+            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, dot)
+            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, ring)
+        }
+        return bmp
     }
 
     /** 把虚拟屏上的 Amazon 任务移到主屏（display 0），然后释放虚拟屏。 */

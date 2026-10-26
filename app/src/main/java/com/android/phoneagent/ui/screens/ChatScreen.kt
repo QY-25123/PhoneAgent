@@ -78,6 +78,11 @@ fun ChatScreen(
     val focus = com.android.phoneagent.ui.model.FocusRequest.target
     LaunchedEffect(focus, items.size) {
         val t = focus ?: return@LaunchedEffect
+        if (t == "live") {   // tapped the floating live window: go straight to the full-screen watch
+            com.android.phoneagent.ui.model.FocusRequest.target = null
+            onOpenFullScreen()
+            return@LaunchedEffect
+        }
         val idx = items.indexOfLast {
             when (t) { "confirm" -> it is ChatItem.Confirm; "handoff" -> it is ChatItem.Handoff; else -> it is ChatItem.Question } 
         }.takeIf { it >= 0 } ?: (items.size - 1).takeIf { it >= 0 }

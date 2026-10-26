@@ -36,6 +36,10 @@ class FloatingController private constructor(context: Context, private val backe
 
     fun setForeground(fg: Boolean) { foreground = fg; render() }
 
+    /** While the full-screen watch page is open the live window would only cover it, so it is hidden. */
+    @Volatile private var liveSuppressed = false
+    private fun suppressLive(v: Boolean) { liveSuppressed = v; scope.launch { render() } }
+
     private fun open(target: String?) {
         ctx.startActivity(
             Intent(ctx, MainActivity::class.java)
@@ -70,7 +74,7 @@ class FloatingController private constructor(context: Context, private val backe
             is TaskEvent.Failed -> { focus = null; state = State("失败", e.reason.take(60), listOf(close())) }
             is TaskEvent.Stopped -> state = null
             is TaskEvent.AgentSaid -> if (state == null || state?.heading == "完成") Unit
-            is TaskEvent.Frame -> { lastThumb = e.thumb; if (state?.heading == "执行中") window.showLive(e.thumb, { backend.stop() }, { dismissed = true; render() }, { open(null) }); return }
+            is TaskEvent.Frame -> { lastThumb = e.thumb; if (state?.heading == "执行中" && !liveSuppressed) window.showLive(e.thumb, { backend.stop() }, { dismissed = true; render() }, { open("live") }); return }
         }
         render()
     }
@@ -78,10 +82,11 @@ class FloatingController private constructor(context: Context, private val backe
     private fun render() {
         val s = state
         if (s == null || dismissed || !Settings.canDrawOverlays(ctx)) { window.hide(); window.hideLive(); return }
+        if (s.heading == "执行中" && liveSuppressed) { window.hide(); window.hideLive(); return }
         if (s.heading == "执行中") {
             // 任务在执行：不管 App 在不在前台，都显示「实时画面 + 结束任务」小窗
             window.hide()
-            window.showLive(lastThumb, { backend.stop() }, { dismissed = true; render() }, { open(null) })
+            window.showLive(lastThumb, { backend.stop() }, { dismissed = true; render() }, { open("live") })
             return
         }
         window.hideLive()
@@ -92,6 +97,9 @@ class FloatingController private constructor(context: Context, private val backe
         @Volatile private var instance: FloatingController? = null
 
         /** 进程内只建一个；MainActivity 创建时调用。 */
+        /** Called by the full-screen watch page when it opens / closes. */
+        fun setLiveSuppressed(v: Boolean) { instance?.suppressLive(v) }
+
         fun install(context: Context): FloatingController = instance ?: synchronized(this) {
             instance ?: FloatingController(context, TaskBackends.get(context)).also { instance = it }
         }

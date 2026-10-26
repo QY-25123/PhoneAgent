@@ -60,6 +60,11 @@ import com.android.phoneagent.ui.theme.AppTheme
 @Composable
 fun FullScreenWatch(controller: ChatController, onExit: () -> Unit, startExpanded: Boolean = false) {
     val c = AppTheme.colors
+    // The floating live window would cover this page, so hide it while the page is open
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.android.phoneagent.task.FloatingController.setLiveSuppressed(true)
+        onDispose { com.android.phoneagent.task.FloatingController.setLiveSuppressed(false) }
+    }
     // 退出只能触发一次：下滑手势会连续回调，之前每次回调都 popBackStack，把对话首页也弹掉，整个 App 就退出了
     var exited by remember { mutableStateOf(false) }
     val exitOnce: () -> Unit = { if (!exited) { exited = true; onExit() } }

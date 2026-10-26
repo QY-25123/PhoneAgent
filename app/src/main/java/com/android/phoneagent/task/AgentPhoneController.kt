@@ -24,6 +24,12 @@ import java.time.ZoneId
 class AgentPhoneController(private val displayId: Int, private val zone: ZoneId = ZoneId.systemDefault()) : PhoneController {
     private val perception = Perception(AgentPerceptionSource(displayId))
 
+    /** Mark the target on the live view, then give the viewer a moment to see it before acting (demo pacing). */
+    private suspend fun markTarget(x: Float, y: Float, screen: ScreenState) {
+        Agent.lastTap = Agent.TapMark((x / screen.screenWidth).coerceIn(0f, 1f), (y / screen.screenHeight).coerceIn(0f, 1f), System.currentTimeMillis())
+        delay(BEFORE_ACTION_MS)
+    }
+
     override suspend fun perceive(): PerceptionResult = perception.perceive(displayId, PerceiveOptions())
 
     override suspend fun launchCalendarInsert(task: CalendarTask): ActionOutcome = run("日历插入事项") {
@@ -93,6 +99,7 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
             is Action.Tap -> {
                 val e = screen.elements.firstOrNull { it.index == action.index } ?: return ActionOutcome(false, "界面上没有编号 ${action.index} 的元素")
                 val x = e.bounds.centerX.toFloat(); val y = e.bounds.centerY.toFloat()
+                markTarget(x, y, screen)
                 run("点击 #${action.index}") {
                     // 无障碍语义点击优先（不产生触摸事件）：按节点引用精确点击，界面变了/点不了再用坐标点击
                     val b = e.bounds
@@ -106,12 +113,14 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
             }
             is Action.TapXY -> {
                 val x = action.x / 1000f * screen.screenWidth; val y = action.y / 1000f * screen.screenHeight
+                markTarget(x, y, screen)
                 run("点击 (${action.x},${action.y})") { Agent.withPriv("坐标点击", guarded = true) { it.tap(displayId, x, y) }; ActionOutcome(true, "坐标点击") }
             }
             is Action.Paste -> run("粘贴") {
                 // 带坐标：先点那个位置（输入框）让它聚焦，再粘贴
                 if (action.x != null && action.y != null) {
                     val px = action.x / 1000f * screen.screenWidth; val py = action.y / 1000f * screen.screenHeight
+                    markTarget(px, py, screen)
                     Agent.withPriv("点击输入框", guarded = true) { it.tap(displayId, px, py) }
                     delay(500)
                 }
@@ -155,7 +164,7 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
             Action.PressEnter -> run("回车") { Agent.withPriv("回车", guarded = true) { it.pressKey(displayId, android.view.KeyEvent.KEYCODE_ENTER) }; ActionOutcome(true, "ok") }
             is Action.Wait, is Action.AskUser, is Action.Done -> ActionOutcome(true, "不需要执行")
         }
-        if (out.ok) delay(250)   // 给界面一点反应时间，之后的感知还会等它稳定
+        if (out.ok) delay(AFTER_ACTION_MS)   // give the screen time to react (and the viewer time to follow); the next perception still waits for it to settle
         return out
     }
 
@@ -168,5 +177,11 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
         // 硬拦截由 UserService 抛出 SecurityException("BLOCKED ...")：不执行，也不重试
         if (m.contains("BLOCKED")) ActionOutcome(false, m.substringAfter("BLOCKED").trim(), blocked = true)
         else ActionOutcome(false, "$what 失败：$m")
+    }
+
+    private companion object {
+        /** Demo pacing: show the target for a moment before acting, and pause after acting. */
+        const val BEFORE_ACTION_MS = 500L
+        const val AFTER_ACTION_MS = 900L
     }
 }

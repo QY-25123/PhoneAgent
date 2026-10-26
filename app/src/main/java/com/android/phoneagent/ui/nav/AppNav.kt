@@ -80,7 +80,7 @@ fun PhoneAgentApp(startRoute: String? = null) {
                     },
                 ) {
                     when (page) {
-                        MainPage.Chat -> ChatScreen(controller, onMenu = { open = true }, onOpenFullScreen = { nav.navigate(Routes.FullScreen) })
+                        MainPage.Chat -> ChatScreen(controller, onMenu = { open = true }, onOpenFullScreen = { nav.navigate(Routes.FullScreen) { launchSingleTop = true } })
                         MainPage.Tasks -> TasksScreen(onMenu = { open = true })
                     }
                 }

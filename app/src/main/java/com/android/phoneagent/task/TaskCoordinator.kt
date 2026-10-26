@@ -72,7 +72,7 @@ class TaskCoordinator(
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     private val cfg: LoopConfig = LoopConfig(),
     /** 执行期间推虚拟屏小图的间隔；0 表示不推（单元测试里用，否则虚拟时间永远推不完） */
-    private val frameIntervalMs: Long = 900,
+    private val frameIntervalMs: Long = 450,
 ) : TaskBackend {
     private val _events = MutableSharedFlow<TaskEvent>(extraBufferCapacity = 256)
     override val events: SharedFlow<TaskEvent> = _events

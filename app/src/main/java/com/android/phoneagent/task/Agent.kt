@@ -245,6 +245,10 @@ object Agent {
     /** 感知：虚拟屏最新一帧的全分辨率位图（需要 [keepFull]）。 */
     fun latestFrame(): Bitmap? = lastFull
 
+    /** Where the agent last tapped / dragged (fractions of the screen) and when; the live view draws a ring there for a moment. */
+    class TapMark(val x: Float, val y: Float, val atMs: Long)
+    @Volatile var lastTap: TapMark? = null
+
     /**
      * debug：对虚拟屏当前页面做一次完整感知，结果写到 files/perceive/<name>.{txt,jpg}；
      * [raw] 时另存原始快照 .snap.json 和原始截图 .png（用来录制测试样本，可能含个人信息，不要提交）。

@@ -114,3 +114,7 @@ Amazon 停在提交订单页后，虚拟屏和前台服务保留着等用户点�
 - 日历、地图、微信、Amazon 都直接执行；只有邮件保留「发送前确认卡片」。
 - Amazon：用户在原话里明确要求改购物车时，直接执行，不再弹确认卡片；特权侧 `CartGate` 仍然有效——只对这组改动布防，其他删除 / 数量 / Save for later 一律拦截。购物车有多件商品时只告知「结算会包含全部 N 件」，不再问「全部结算还是调整」。付款界面（提交订单页）照旧停下交给用户。
 - 设备验证：搜索加购 → 结算到提交订单页（没下单）；「先把 AAA batteries 删掉」直接删除成功。
+
+## 22. Floating window and pacing (2026-10-26)
+- Tapping the floating live window (title or picture) now opens the app straight into the full-screen watch page; the window hides itself while that page is open.
+- Demo pacing: before each tap / paste the target is marked on the live view with a red ring for ~0.5 s, then the action runs, then a 0.9 s pause (`AgentPhoneController.BEFORE_ACTION_MS` / `AFTER_ACTION_MS`); live frames are pushed every 450 ms. Tasks take a little longer as a result. Scroll and drag gestures are not marked.
