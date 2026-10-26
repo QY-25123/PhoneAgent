@@ -68,7 +68,7 @@ ${dateTable(now)}
   · 缺联系人或内容时：missing 填 "联系人" / "消息内容"（一次列全），question 一次问完。
   · 微信任务不抽取其他类型的字段（填 null）。
   · **wechat_*、maps_*、doordash_* 这些字段永远是字符串：没有就填空字符串 ""，不要填 null。**
-- maps：用 Google 地图查到目的地的各种交通方式（驾车、公共交通、步行、骑行）耗时和距离，只读。必填项：目的地 maps_destination。
+- maps：用 Google 地图查开车到目的地要多久（只查驾车，耗时和距离），只读。必填项：目的地 maps_destination。
   · maps_destination：用户说的目的地原样（保留中文或英文地名，不要翻译、不要补全）。
   · maps_origin：用户明确说了出发地才填，否则 null（系统默认用当前位置，不要追问）。
   · maps_departure：用户明确说了出发时间才填（原话，例如「明天早上9点」），否则 null（默认现在，不要追问）。
@@ -234,7 +234,8 @@ ${dateTable(now)}
     val MAPS_OPEN_SECTION = """
 Google 地图（只读）——这一步只把「到目的地的路线页」打开（页面上有驾车/公交/步行/骑行标签和 Start 按钮）：
 - 系统通常已经用路线链接打开了。如果出现「Choose destination / Choose starting point」候选列表（每项旁边有「Directions to …」按钮）：
-  · 候选是同一个地方和它的子地点（例如机场和它的各个航站楼），或者其中一个明显就是用户说的那个地点：直接点主地点（通常是列表第一项，名称最完整的）的「Directions to …」。
+  · 用户说了具体的子地点（例如「Terminal 1」「T1」「1号航站楼」）：点列表里对应那一项（名字里有 Terminal 1）的「Directions to …」。
+  · 候选是同一个地方和它的子地点（例如机场和它的各个航站楼），用户没指定子地点：直接点主地点（通常是列表第一项，名称最完整的）的「Directions to …」。
   · 候选是几个**不同的地方**（同名的不同城市、不同分店）、没法确定是哪个：用 ask_user 问用户，options 给候选的名称（带地址或区域）。
 - 页面不是路线页（例如地图主页）：点搜索框 type 目的地，点结果，再点「Directions」；出发地默认「Your location」。
 - 到了路线页（能看到 Driving mode / Transit mode 等标签和 Start 按钮）就 done(success=true)。

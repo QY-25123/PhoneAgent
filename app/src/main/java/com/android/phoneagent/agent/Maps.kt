@@ -6,8 +6,11 @@ import java.net.URLEncoder
 
 /** 路线任务：目的地必填；出发地默认「当前位置」，出发时间默认「现在」。 */
 data class MapsTask(val destination: String, val origin: String?, val departure: String?) {
-    fun restatement(): String = "地图：" + (origin?.let { "从「$it」" } ?: "从当前位置") + "到「$destination」，" + (departure?.let { "$it 出发" } ?: "现在出发") + "，查驾车 / 公交 / 步行 / 骑行的耗时"
+    fun restatement(): String = "地图：" + (origin?.let { "从「$it」" } ?: "从当前位置") + "到「$destination」，" + (departure?.let { "$it 出发" } ?: "现在出发") + "，查开车要多久"
 }
+
+/** Product decision: only driving time is looked up (it keeps the task short). */
+val MAPS_MODES = listOf(TravelMode.DRIVING)
 
 enum class TravelMode(val key: String, val zh: String, val tab: String) {
     DRIVING("driving", "驾车", "Driving"), TRANSIT("transit", "公共交通", "Transit"),
@@ -156,9 +159,10 @@ class MapsFlow(
         if (!MapsReader.isRoutePage(screen.state)) return MapsResult.Failed("没能打开路线页", MapsOpenTask(task).leftovers)
         val durations = MapsReader.durationTexts(screen.state)
         val rows = ArrayList<RouteRow>()
-        for (mode in TravelMode.values()) {
+        for (mode in MAPS_MODES) {
             val tab = MapsReader.tabIndex(screen.state, mode)
-            if (tab != null) {
+            // the link already opened the right mode: only tap a tab when it is not the one being shown
+            if (tab != null && mode != TravelMode.DRIVING) {
                 host.onStep(StepInfo(null, "路线页", "切换到${mode.zh}", screen))
                 phone.execute(Action.Tap(tab), screen.state)
                 sleep(2000)
@@ -176,7 +180,7 @@ class MapsFlow(
             val minutes = MapsReader.parseMinutes(text)
             rows += if (minutes != null) RouteRow(mode, minutes, text, dist) else RouteRow(mode, null, null, null)
         }
-        val fastest = rows.filter { it.available }.minByOrNull { it.minutes!! }?.mode
+        val fastest = if (rows.size > 1) rows.filter { it.available }.minByOrNull { it.minutes!! }?.mode else null
         if (rows.none { it.available }) return MapsResult.Failed("没能读到任何交通方式的耗时", MapsOpenTask(task).leftovers)
         // 停在最快的方式上，用户点「去查看」时看到的就是它
         fastest?.let { f -> runCatching {

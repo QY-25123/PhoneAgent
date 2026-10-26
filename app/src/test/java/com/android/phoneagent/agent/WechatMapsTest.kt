@@ -155,21 +155,20 @@ class WechatMapsTest {
         override fun say(text: String) {}
     }
 
-    @Test fun mapsFlowReadsAllModesMarksFastestAndNeverTapsStart() = runTest {
+    @Test fun mapsFlowReadsOnlyDrivingAndNeverTapsStart() = runTest {
         val phone = FakePhone({ mapsRoute() })
         val r = MapsFlow(FakeModel(listOf("{}")), phone, MHost(), LoopConfig(), { NOW }, NoopRunLog, sleep = {}).run(MapsTask("旧金山机场", null, null)) as MapsResult.Done
         assertThat(phone.mapsUrls.single()).contains("destination=%E6%97%A7%E9%87%91%E5%B1%B1%E6%9C%BA%E5%9C%BA")
         assertThat(phone.mapsUrls.single()).doesNotContain("origin=")
-        assertThat(r.rows.map { it.mode }).containsExactly(TravelMode.DRIVING, TravelMode.TRANSIT, TravelMode.WALKING, TravelMode.BICYCLING).inOrder()
-        assertThat(r.fastest).isEqualTo(TravelMode.DRIVING)
+        assertThat(r.rows.map { it.mode }).containsExactly(TravelMode.DRIVING)   // only driving time is looked up
+        assertThat(r.fastest).isNull()
         assertThat(r.rows.first().distance).isEqualTo("21 mi")
         assertThat(phone.executed.filterIsInstance<Action.Tap>().map { it.index }).doesNotContain(5)   // 5 是 Start
     }
 
-    @Test fun unavailableModeIsMarked() = runTest {
-        val phone = FakePhone({ mapsRoute(bicycling = "") })
-        val r = MapsFlow(FakeModel(listOf("{}")), phone, MHost(), LoopConfig(), { NOW }, NoopRunLog, sleep = {}).run(MapsTask("x", "y", null)) as MapsResult.Done
-        assertThat(r.rows.last().available).isFalse()
+    @Test fun originIsPassedInTheLink() = runTest {
+        val phone = FakePhone({ mapsRoute() })
+        MapsFlow(FakeModel(listOf("{}")), phone, MHost(), LoopConfig(), { NOW }, NoopRunLog, sleep = {}).run(MapsTask("x", "y", null))
         assertThat(phone.mapsUrls.single()).contains("origin=y")
     }
 

@@ -316,7 +316,7 @@ class TaskCoordinator(
                         if (!row.available) "${row.mode.zh}：不可用"
                         else "${row.mode.zh}：${MapsReader.fmtMinutes(row.minutes!!)}" + (row.distance?.let { " · $it" } ?: "") + (if (row.mode == r.fastest) "  ⚡最快" else "")
                     }
-                    emit(TaskEvent.Handoff("到「${task.destination}」的路线", lines + (r.note?.let { "\n$it" } ?: ""), action = "去查看", heading = "各交通方式耗时"))
+                    emit(TaskEvent.Handoff("到「${task.destination}」的路线", lines + (r.note?.let { "\n$it" } ?: ""), action = "去查看", heading = "驾车耗时"))
                 }
                 is MapsResult.Failed -> emit(TaskEvent.Failed(r.reason, r.leftovers))
             }
