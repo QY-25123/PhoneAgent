@@ -36,5 +36,7 @@ class DisplayTasks {
     /** 把任务移到另一块屏幕（交接用）。 */
     fun moveToDisplay(taskId: Int, displayId: Int) {
         atm.javaClass.getMethod("moveRootTaskToDisplay", Int::class.java, Int::class.java).invoke(atm, taskId, displayId)
+        // Moving a task does not always bring it in front of the app the user is looking at (DoorDash stayed hidden behind PhoneAgent): focus it explicitly
+        runCatching { atm.javaClass.getMethod("setFocusedRootTask", Int::class.java).invoke(atm, taskId) }
     }
 }

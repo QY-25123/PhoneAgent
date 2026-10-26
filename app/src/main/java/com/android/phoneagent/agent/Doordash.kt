@@ -8,7 +8,7 @@ data class DoordashTask(val restaurant: String, val item: String, val quantity: 
 }
 
 object DoordashReader {
-    private val TOTAL = Regex("Total\\s*\\$\\s*([\\d,]+\\.\\d\\d)", RegexOption.IGNORE_CASE)
+    private val TOTAL = Regex("(?<![A-Za-z])Total( before tip)?\\s*\\$\\s*([\\d,]+\\.\\d\\d)", RegexOption.IGNORE_CASE)   // not "Subtotal"
 
     private fun blob(s: ScreenState) = s.elements.joinToString("\n") { listOfNotNull(it.text, it.desc, it.mergedText).joinToString(" ") }
 
@@ -18,7 +18,7 @@ object DoordashReader {
 
     /** 结账页上的总价（「Total $xx.xx」）。 */
     fun orderSummary(s: ScreenState): String =
-        TOTAL.findAll(blob(s)).lastOrNull()?.groupValues?.get(1)?.let { "订单总价 \$$it" } ?: ""
+        TOTAL.findAll(blob(s)).lastOrNull()?.groupValues?.get(2)?.let { "订单总价 \$$it" } ?: ""
 }
 
 private const val DOORDASH_RULES = "绝不点击「Place Order」或任何下单/付款按钮，绝不点 DashPass 的「Try / Start / Join」按钮（会订阅并扣费，被拦截就换别的路，不要反复尝试）；弹出 DashPass 推广时点「Not now / 关闭」。"

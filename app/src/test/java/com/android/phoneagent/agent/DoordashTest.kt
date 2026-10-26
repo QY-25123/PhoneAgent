@@ -67,6 +67,8 @@ class DoordashTest {
         val s = dd("Checkout", "Total \$18.09", "Place Order").state
         assertThat(DoordashReader.isOrderPage(s)).isTrue()
         assertThat(DoordashReader.orderSummary(s)).contains("18.09")
+        // "Subtotal" must not be mistaken for the total
+        assertThat(DoordashReader.orderSummary(dd("Checkout", "Subtotal \$27.38", "Total before tip \$34.36", "Place Order").state)).contains("34.36")
         assertThat(DoordashReader.isOrderPage(dd("Cart", "Checkout").state)).isFalse()
         assertThat(DoordashReader.isOrderPage(dd("Checkout", "Place Order", pkg = "com.other").state)).isFalse()
     }

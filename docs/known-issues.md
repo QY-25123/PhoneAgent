@@ -127,3 +127,10 @@ Amazon 停在提交订单页后，虚拟屏和前台服务保留着等用户点�
 - **Dimmed / frozen WeChat** (two runs): from the first perception the whole screen is dim and slightly enlarged, taps do nothing, the loop stops with "screen unchanged for 3 steps". Looks like a stuck page transition after the task is moved onto the virtual display; it is intermittent (about 2 of 10 runs) and the cause is not confirmed. Mitigation: the prompt tells the model to wait on a dimmed screen instead of tapping, and `WechatFlow` re-runs the compose stage once (its prelaunch relaunches WeChat). Not verified to fix it, because the condition could not be forced on demand.
 - **"Send button not found"** (one run): the model did not report the Send position. `WechatFlow` now re-reads once and falls back to the usual position (930, 965 of 1000) when the input has text.
 - The tap indicator in the live view is now a small soft ring that fades in 0.7 s instead of a big red dot.
+
+## 25. DoorDash（任务 6）
+- 流程：打开 App → 搜餐厅 → 加购 → 购物车核对份数 → 结账页停下交接。「Place Order」、DashPass（Try / Start / Join / 免费试用）由 `SafetyRules` 硬拦截；结账页出现「Place Order」时页面级锁定。
+- 菜单卡片上的「+」会直接加一份：agent 曾既点「+」又点进详情再加，造成重复。现在提示词要求只加一次，并在购物车里把份数调回要求的数量（购物车里更早就有的别的菜不动）。
+- 交接时 `moveRootTaskToDisplay` 只是把任务移到主屏，不一定盖住 PhoneAgent（DoorDash 停在后面不可见）：现在移完再 `setFocusedRootTask`，实测 DoorDash 会出现在前面。交接后看到的可能是购物车页而不是结账页，点 Continue 即可。
+- 只在模拟器上、用一个餐厅（Shake Shack）验证过；Wingstop 的无骨鸡翅（要在详情里选无骨和口味）跑到过详情页，没有跑完。
+- 结账页读到的「订单总价」是 Total before tip（不含小费），Place Order 按钮上的金额含小费。
