@@ -166,6 +166,7 @@ object Agent {
         stopReader()
         preview = null
         lastFull = null
+        liveFrame = null
         previewFps = 1   // back to the idle rate
         displayId = -1
         appContext.stopService(Intent(appContext, AgentService::class.java))
@@ -313,10 +314,12 @@ object Agent {
     fun globalBack() = call("GLOBAL_BACK") { report("GLOBAL_ACTION_BACK ${if (it.globalBack()) "已执行" else "失败"}") }
 
     // 画面采集频率：默认 1 fps（非全屏，仅供观察）；全屏观看时调高。可用 debug 广播 config 修改
-    private const val LIVE_FPS = 15
+    private const val LIVE_FPS = 30
     @Volatile var previewFps = 1
     @Volatile var keepFull = false          // debug：保留最近一帧的全分辨率位图，供 shot 保存
     @Volatile private var lastFull: Bitmap? = null
+    /** The latest frame already scaled to 540x1200 (never mutated or recycled, so it can be shared). */
+    @Volatile var liveFrame: Bitmap? = null
     private var readerHandler: Handler? = null
     private var catchUpPending = false
     val framesAvailable = java.util.concurrent.atomic.AtomicLong()   // ImageReader 回调次数（虚拟屏实际产出的帧）
@@ -349,6 +352,7 @@ object Agent {
             if (keepFull) lastFull = cropped
             val small = Bitmap.createScaledBitmap(cropped, 540, 1200, true)
             if (cropped !== full) full.recycle()
+            liveFrame = small   // 540x1200, already scaled: the live view reuses it without another copy
             preview = small.asImageBitmap()
             framesProcessed.incrementAndGet()
         } finally {

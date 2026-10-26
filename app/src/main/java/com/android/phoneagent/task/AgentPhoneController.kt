@@ -74,7 +74,12 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
 
     override suspend fun openApp(app: String): ActionOutcome {
         val pkg = AppCatalog.resolve(app) ?: return ActionOutcome(false, "不允许打开「$app」：只能打开日历、Gmail、Amazon、微信、地图")
-        return run("打开 $pkg") { Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }; ActionOutcome(true, "ok") }
+        return run("打开 $pkg") {
+            Agent.withPriv("打开 $pkg", guarded = true) { it.launchApp(displayId, pkg) }
+            // WeChat cold-starts slowly on a virtual display (a full-screen splash picture for 5-15 s): give it a head start
+            if (pkg == AppCatalog.WECHAT) delay(WECHAT_COLD_START_MS)
+            ActionOutcome(true, "ok")
+        }
     }
 
     override suspend fun armGmailSend(hash: String): Boolean = try {
@@ -183,5 +188,6 @@ class AgentPhoneController(private val displayId: Int, private val zone: ZoneId 
         /** Demo pacing: show the target for a moment before acting, and pause after acting. */
         const val BEFORE_ACTION_MS = 500L
         const val AFTER_ACTION_MS = 900L
+        const val WECHAT_COLD_START_MS = 6000L
     }
 }

@@ -24,16 +24,20 @@ class AgentTaskEnvironment(private val context: Context) : TaskEnvironment {
     }
 
     override fun thumbnail(width: Int): Bitmap? {
-        val f = Agent.latestFrame() ?: return null
-        val bmp = Bitmap.createScaledBitmap(f, width, f.height * width / f.width, true).copy(Bitmap.Config.ARGB_8888, true)
+        val ring = Agent.lastTap?.takeIf { System.currentTimeMillis() - it.atMs < 2200 }
+        val live = Agent.liveFrame
+        // Fast path: the frame is already 540 wide and there is no tap ring to draw, so share it as it is
+        if (live != null && width == live.width && ring == null) return live
+        val src = live ?: Agent.latestFrame() ?: return null
+        val bmp = Bitmap.createScaledBitmap(src, width, src.height * width / src.width, true).let { if (it === src || !it.isMutable) it.copy(Bitmap.Config.ARGB_8888, true) else it }
         // Show where the agent is about to tap / has just tapped, so the live view makes the action visible
-        Agent.lastTap?.takeIf { System.currentTimeMillis() - it.atMs < 2200 }?.let { m ->
+        ring?.let { m ->
             val c = android.graphics.Canvas(bmp)
             val r = bmp.width * 0.07f
-            val ring = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = bmp.width * 0.012f; color = 0xFFFF1744.toInt(); isAntiAlias = true }
+            val ringPaint = android.graphics.Paint().apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = bmp.width * 0.012f; color = 0xFFFF1744.toInt(); isAntiAlias = true }
             val dot = android.graphics.Paint().apply { color = 0x66FF1744; isAntiAlias = true }
             c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, dot)
-            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, ring)
+            c.drawCircle(m.x * bmp.width, m.y * bmp.height, r, ringPaint)
         }
         return bmp
     }

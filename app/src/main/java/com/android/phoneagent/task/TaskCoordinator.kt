@@ -72,7 +72,7 @@ class TaskCoordinator(
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     private val cfg: LoopConfig = LoopConfig(),
     /** 执行期间推虚拟屏小图的间隔；0 表示不推（单元测试里用，否则虚拟时间永远推不完） */
-    private val frameIntervalMs: Long = 100,
+    private val frameIntervalMs: Long = 16,
 ) : TaskBackend {
     private val _events = MutableSharedFlow<TaskEvent>(extraBufferCapacity = 256)
     override val events: SharedFlow<TaskEvent> = _events
@@ -348,9 +348,16 @@ class TaskCoordinator(
 
     /** 执行期间每隔约 1 秒推一张虚拟屏小图，让实时画面卡片和全屏观看是流动的（不进历史）。 */
     private fun startFrames(): Job = scope.launch {
+        var lastSeq = -1L
         while (frameIntervalMs > 0) {
             kotlinx.coroutines.delay(frameIntervalMs)
-            env.thumbnail(FRAME_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
+            // Only push when the display produced a new frame (or a tap ring is animating): no point re-sending the same picture
+            val seq = Agent.framesProcessed.get()
+            val ringOn = Agent.lastTap?.let { System.currentTimeMillis() - it.atMs < 2200 } == true
+            if (seq != lastSeq || ringOn) {
+                lastSeq = seq
+                env.thumbnail(FRAME_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
+            }
         }
     }
 
