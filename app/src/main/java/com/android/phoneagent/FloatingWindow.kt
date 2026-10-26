@@ -12,6 +12,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.graphics.Bitmap
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -83,7 +84,8 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
 
     // ---------------- 执行中的「实时画面」小窗：虚拟屏画面 + 「结束任务」 ----------------
     private var liveRoot: LinearLayout? = null
-    private var liveImage: ImageView? = null
+    private var liveImage: View? = null
+    private var liveRing: View? = null
     private val liveLp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -101,15 +103,41 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
                 setOnClickListener { Log.i("PA", "OVERLAY_ACTION 关闭实时画面"); onClose() }
             }
             val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(title); addView(close) }
-            val img = ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.FIT_XY   // the view has the screen's 9:20 ratio, so nothing is cropped or stretched
+            // The virtual display renders straight into this SurfaceView (no screenshots); the ring is a plain view drawn above it
+            val sv = android.view.SurfaceView(ctx).apply {
+                holder.setFixedSize(com.android.phoneagent.task.Agent.WIDTH, com.android.phoneagent.task.Agent.HEIGHT)
+                holder.addCallback(object : android.view.SurfaceHolder.Callback {
+                    override fun surfaceCreated(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToView(this@apply) }
+                    override fun surfaceChanged(h: android.view.SurfaceHolder, f: Int, w: Int, hh: Int) {}
+                    override fun surfaceDestroyed(h: android.view.SurfaceHolder) { com.android.phoneagent.task.Agent.routeToReader() }
+                })
+            }
+            val ring = object : View(ctx) {
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeWidth = px(2).toFloat(); color = Color.WHITE }
+                override fun onDraw(c: android.graphics.Canvas) {
+                    val t = com.android.phoneagent.task.Agent.lastTap ?: return
+                    val age = System.currentTimeMillis() - t.atMs
+                    if (age > com.android.phoneagent.task.Agent.TAP_MARK_MS) return
+                    val f = age / com.android.phoneagent.task.Agent.TAP_MARK_MS.toFloat()
+                    paint.alpha = (200 * (1 - f)).toInt()
+                    c.drawCircle(t.x * width, t.y * height, px(6) + px(6) * f, paint)
+                    postInvalidateOnAnimation()
+                }
+            }
+            val img = FrameLayout(ctx).apply {
                 setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }
                 setBackgroundColor(0xFF22303F.toInt())
+                addView(sv, FrameLayout.LayoutParams(-1, -1))
+                addView(ring, FrameLayout.LayoutParams(-1, -1))
+                // taps land on the SurfaceView, so forward them to the open action
+                sv.setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }
+                ring.setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }
                 clipToOutline = true
                 outlineProvider = object : android.view.ViewOutlineProvider() {
                     override fun getOutline(v: View, o: android.graphics.Outline) = o.setRoundRect(0, 0, v.width, v.height, px(10).toFloat())
                 }
             }
+            liveRing = ring
             val stop = TextView(ctx).apply {
                 text = "结束任务"; setTextColor(Color.WHITE); textSize = 15f; gravity = Gravity.CENTER
                 setPadding(0, px(10), 0, px(10))
@@ -128,7 +156,7 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
             liveImage = img; liveRoot = r
             wm.addView(r, liveLp)
         }
-        thumb?.let { liveImage?.setImageBitmap(it) }
+        liveRing?.postInvalidateOnAnimation()   // the picture is live; only the tap ring needs a nudge
     }
 
     fun hideLive() = main.post {

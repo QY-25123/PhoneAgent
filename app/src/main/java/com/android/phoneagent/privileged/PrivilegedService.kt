@@ -23,6 +23,8 @@ class PrivilegedService : IPrivileged.Stub() {
     override fun createDisplay(surface: Surface, width: Int, height: Int, dpi: Int, stealTopFocusDisabled: Boolean): Int =
         display.create(surface, width, height, dpi, stealTopFocusDisabled)
 
+    override fun setDisplaySurface(surface: Surface) = display.setSurface(surface)
+
     // 原型阶段直接用 am start --display；--activity-clear-task 避免复用主屏上已有的 task。
     // component 不含 "/" 时当作包名，解析它的 LAUNCHER activity。
     override fun launchApp(displayId: Int, component: String) {

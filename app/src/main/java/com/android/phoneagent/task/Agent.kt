@@ -91,7 +91,7 @@ object Agent {
 
     private fun bindService() {
         val args = Shizuku.UserServiceArgs(ComponentName(appContext.packageName, PrivilegedService::class.java.name))
-            .processNameSuffix("priv").daemon(false).version(3)
+            .processNameSuffix("priv").daemon(false).version(4)
         Shizuku.bindUserService(args, conn)
         report("正在绑定 UserService…")
     }
@@ -316,6 +316,7 @@ object Agent {
 
     // 画面采集频率：默认 1 fps（非全屏，仅供观察）；全屏观看时调高。可用 debug 广播 config 修改
     private const val LIVE_FPS = 30
+    private const val COPY_MAX_FPS = 10   // the agent only needs frames to read; the live window shows the display directly
     @Volatile var previewFps = 1
     @Volatile var keepFull = false          // debug：保留最近一帧的全分辨率位图，供 shot 保存
     @Volatile private var lastFull: Bitmap? = null
@@ -350,14 +351,54 @@ object Agent {
             val full = Bitmap.createBitmap(rowPixels, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(plane.buffer)
             val cropped = if (rowPixels == img.width) full else Bitmap.createBitmap(full, 0, 0, img.width, img.height)   // skip a 10 MB copy when there is no row padding
-            if (keepFull) lastFull = cropped
-            val small = Bitmap.createScaledBitmap(cropped, 540, 1200, true)
+            publish(cropped)
             if (cropped !== full) full.recycle()
-            liveFrame = small   // 540x1200, already scaled: the live view reuses it without another copy
-            preview = small.asImageBitmap()
-            framesProcessed.incrementAndGet()
         } finally {
             img.close()
+        }
+    }
+
+    /** Hand a full-size frame to the consumers (perception keeps it, the live view gets the 540x1200 copy). */
+    private fun publish(cropped: Bitmap) {
+        if (keepFull) lastFull = cropped
+        val small = Bitmap.createScaledBitmap(cropped, 540, 1200, true)
+        liveFrame = small   // 540x1200, already scaled: the live view reuses it without another copy
+        preview = small.asImageBitmap()
+        framesProcessed.incrementAndGet()
+    }
+
+    // ---- Live window renders the virtual display directly (SurfaceView); the agent's own frames come from PixelCopy ----
+    @Volatile private var liveView: android.view.SurfaceView? = null
+
+    /** The floating window's SurfaceView is ready: point the virtual display at it and keep the agent's frames flowing via PixelCopy. */
+    fun routeToView(v: android.view.SurfaceView) {
+        liveView = v
+        call("画面接到悬浮窗") { it.setDisplaySurface(v.holder.surface) }
+        readerHandler?.removeCallbacks(copyLoop); readerHandler?.post(copyLoop)
+    }
+
+    /** The SurfaceView is going away: send the display back to the ImageReader. */
+    fun routeToReader() {
+        liveView = null
+        readerHandler?.removeCallbacks(copyLoop)
+        val r = reader ?: return
+        call("画面接回 ImageReader") { it.setDisplaySurface(r.surface) }
+    }
+
+    private val copyLoop = object : Runnable {
+        override fun run() {
+            val v = liveView ?: return
+            val h = readerHandler ?: return
+            val next = 1000L / previewFps.coerceIn(1, COPY_MAX_FPS)
+            if (!v.holder.surface.isValid) { h.postDelayed(this, next); return }
+            val bmp = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
+            try {
+                android.view.PixelCopy.request(v, bmp, { res ->
+                    if (res == android.view.PixelCopy.SUCCESS && liveView === v) { lastFrameAt = android.os.SystemClock.uptimeMillis(); publish(bmp) }
+                    framesAvailable.incrementAndGet()
+                    if (liveView === v) h.postDelayed(this, next)
+                }, h)
+            } catch (e: Throwable) { h.postDelayed(this, next) }
         }
     }
 

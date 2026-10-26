@@ -71,6 +71,9 @@ interface IPrivileged {
     // 界面树读不到时（微信）写文字：把 text 放进系统剪贴板，再向该屏幕注入粘贴键（调用前要先点中输入框）
     boolean pasteText(int displayId, String text) = 32;
 
+    // 把虚拟屏的输出改接到另一个 Surface（悬浮窗的 SurfaceView，或回到 ImageReader）
+    void setDisplaySurface(in Surface surface) = 33;
+
     // 把根任务移到另一块屏幕
     void moveTaskToDisplay(int taskId, int displayId) = 18;
 }

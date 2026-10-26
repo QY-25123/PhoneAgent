@@ -19,6 +19,9 @@ class VirtualDisplayHolder(private val context: FakeContext) {
         return d.display.displayId
     }
 
+    /** Redirect the display output (the live window's SurfaceView renders it directly, no per-frame copy). */
+    fun setSurface(surface: Surface) { display?.surface = surface }
+
     /** 隐藏常量 VIRTUAL_DISPLAY_FLAG_STEAL_TOP_FOCUS_DISABLED（Android 14），需要 OWN_FOCUS。反射读取，读不到按 1 shl 16。 */
     private fun stealFlag(): Int {
         val v = runCatching {
