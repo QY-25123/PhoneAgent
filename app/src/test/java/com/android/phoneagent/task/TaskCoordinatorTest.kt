@@ -183,4 +183,20 @@ class TaskCoordinatorTest {
         settle()
         assertThat(events.filterIsInstance<TaskEvent.Confirm>()).hasSize(2)   // 改完后重新出现确认卡片
     }
+
+    @Test fun retryAfterAnAttemptedSendChecksTheSentFolderBeforeSendingAgain() = runTest {
+        // 第一次：点了发送但没能在已发送里确认 → 失败（sendAttempted）；第二次同一封邮件：先查已发送，发现已发出 → 不再发送
+        val phone = mailPhone()
+        val failFirst = listOf(emailReady, stepJson("done", success = true, result = "没找到"), verifyJson(false, "没有"), stepJson("done", success = true, result = "没找到"), verifyJson(false, "没有"))
+        val replies = failFirst + listOf(emailReady, stepJson("done", success = true, result = "已发送里有"), verifyJson(true))
+        val (c, _, events) = setup(replies, phone)
+        c.submit("给 qijie_jerry@163.com 发邮件"); settle()
+        c.confirm(ConfirmChoice.SEND); settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Failed::class.java)
+        val armedBefore = phone.armed.size
+        c.submit("给 qijie_jerry@163.com 发邮件"); settle()
+        assertThat(events.last()).isInstanceOf(TaskEvent.Succeeded::class.java)
+        assertThat((events.last() as TaskEvent.Succeeded).title).contains("没有重复发送")
+        assertThat(phone.armed.size).isEqualTo(armedBefore)            // 第二次没有再布防/发送
+    }
 }

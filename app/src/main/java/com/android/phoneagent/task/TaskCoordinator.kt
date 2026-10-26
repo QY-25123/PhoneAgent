@@ -99,6 +99,7 @@ class TaskCoordinator(
     private var earlyInstruction: String? = null   // 确认卡片等待期间用户直接打字：当作修改要求
     @Volatile private var handoffNote = "已打开 Amazon，下单和付款请你来完成。"
     @Volatile private var handoffPending = false   // 已停在提交订单页、虚拟屏保留着等用户点「去完成」
+    private val sendAttempted = HashSet<String>()   // 点过发送的邮件（收件人|主题）：重试前必须先查「已发送」
 
     override fun submit(text: String): Boolean {
         val t = text.trim()
@@ -443,6 +444,7 @@ class TaskCoordinator(
 
     private suspend fun executeEmail(task: EmailTask, log: RunLog, prefetched: Deferred<Result<PhoneController>>?) {
         emit(TaskEvent.Started("邮件 · ${task.recipient}", cfg.maxSteps))
+        val key = task.recipient.lowercase() + "|" + task.subject
         val frames = startFrames()
         try {
             val phone = try { prefetched?.await()?.getOrThrow() ?: env.prepare() } catch (e: IllegalStateException) {
@@ -462,15 +464,18 @@ class TaskCoordinator(
                     return awaitDecision()
                 }
             }
-            val result = EmailFlow(model, phone, host, cfg, clock, log).run(task)
+            val result = EmailFlow(model, phone, host, cfg, clock, log).run(task, checkSentFirst = key in sendAttempted)
             val image = env.thumbnail(EVIDENCE_W)
             when (result) {
                 is EmailResult.Sent -> {
+                    sendAttempted += key
                     emit(TaskEvent.Succeeded("邮件已发送给 ${result.draft.to.joinToString(", ")}", "主题：${result.draft.subject}",
-                        listOf(result.evidence, "收件人和主题与你确认的一致"), image))
+                        listOf(result.evidence.ifBlank { "在「已发送」里找到了这封邮件" }, "收件人和主题与你确认的一致"), image))
                 }
+                is EmailResult.AlreadySent -> emit(TaskEvent.Succeeded("这封邮件之前已经发出，没有重复发送", "收件人：${task.recipient}　主题：${task.subject}",
+                    listOf(result.evidence.ifBlank { "在「已发送」里找到了这封邮件" }), image))
                 is EmailResult.Cancelled -> emit(TaskEvent.Stopped("已取消。" + result.note))
-                is EmailResult.Failed -> emit(TaskEvent.Failed(result.reason, result.leftovers))
+                is EmailResult.Failed -> { if (result.sendAttempted) sendAttempted += key; emit(TaskEvent.Failed(result.reason, result.leftovers)) }
             }
         } finally {
             frames.cancel()
