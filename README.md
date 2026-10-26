@@ -155,4 +155,4 @@ docs/       PRD、设计稿、开发计划、验证记录、截图
 scripts/    设备端回归、真实任务测试、样本脱敏等脚本
 ```
 
-当前在 Android 14 模拟器上完整验证；更多细节和取舍记录在 [`docs/known-issues.md`](docs/known-issues.md)。
+后续规划见上面的「落地到普通用户手机」。
