@@ -102,6 +102,22 @@ PhoneAgent 能点屏幕上的任何东西，所以**最危险的按钮从一开�
 | **SurfaceView 直出实时画面** | 悬浮窗里让虚拟屏直接渲染，省掉「截图 → 复制 → 缩放」的逐帧开销，画面更流畅；Agent 自己读屏另走一条 `PixelCopy` 的通道。 |
 | **Kotlin + Jetpack Compose** | 原生 Android，能直接调用系统隐藏接口；Compose 写对话界面和卡片更快，主题统一管理颜色和字号。 |
 
+## 落地到普通用户手机（后续规划）
+
+目标是让普通用户下载一个 APK 就能用，不需要电脑、不需要 root：
+
+1. **下载并安装 APK**：从 GitHub Releases 下载 PhoneAgent，直接在手机上安装。
+2. **首次打开，App 引导你开启 Shizuku**：一步一步带你安装、启动并授权 Shizuku，再开启悬浮窗权限。
+3. **在 Agent 里填入自己的 Claude API Key**：Key 存在系统 Keystore 里，请求直接发给 Claude，不经过任何第三方服务器。
+4. **开始对话**：说一句话，Agent 在后台虚拟屏上办事，你照常用手机。
+
+**后续将开发**
+- 设置页里让用户填写并保存自己的 API Key（目前 Key 只来自本地开发配置）。
+- 首次打开的引导流程：检查 Shizuku 与各项权限，缺什么就告诉用户下一步点哪里。
+- 签名的 release APK，发布到 GitHub Releases。
+- 真机验证与主流厂商 ROM 适配：所有对系统隐藏接口的调用都收敛在 `privileged` 一层，适配只需要改这一层；`scripts/regress.sh` 可以在新设备上快速回归。
+- 更多 App 的任务模板。
+
 ## 如何运行
 
 1. **环境**：Android Studio 模拟器（Pixel 8，Android 14，带 Google Play），登录 Google 账号，装好日历、Gmail、Google 地图；要试微信和 DoorDash 任务，需要装好并登录对应 App。
