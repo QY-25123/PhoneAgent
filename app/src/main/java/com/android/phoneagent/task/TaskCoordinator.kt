@@ -87,6 +87,10 @@ class TaskCoordinator(
     private val lock = Any()
     private val history = ArrayList<TaskEvent>()
     override fun history(): List<TaskEvent> = synchronized(history) { history.toList() }
+    override fun clearHistory() {
+        if (_busy.value || handoffPending) return
+        synchronized(history) { history.clear() }
+    }
     private var session: Job? = null
     private var pendingAnswer: CompletableDeferred<String>? = null
     private var pendingConfirm: CompletableDeferred<ConfirmChoice>? = null

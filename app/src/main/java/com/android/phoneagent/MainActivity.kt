@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
         AgentProfile.init(this)
         // 回归脚本用：--es route debug 直接打开技术验证用的测试界面
         val start = if (intent.getStringExtra("route") == "debug") Routes.Debug else null
+        if (savedInstanceState == null) com.android.phoneagent.task.TaskBackends.get(this).clearHistory()   // swiped away from recents and reopened: start with an empty conversation
         com.android.phoneagent.task.FloatingController.install(this)
         com.android.phoneagent.ui.model.FocusRequest.target = intent.getStringExtra("focus")
         setContent { PhoneAgentApp(start) }

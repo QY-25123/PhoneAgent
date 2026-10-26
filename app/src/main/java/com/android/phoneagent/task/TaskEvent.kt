@@ -50,6 +50,9 @@ interface TaskBackend {
     /** 到现在为止发生过的事件（进展事件不带缩略图）。界面（重新）创建时先回放它，再订阅 [events]，这样关掉 App 再打开、或别的入口提交的任务，对话里都看得到。 */
     fun history(): List<TaskEvent>
 
+    /** A fresh launch of the app starts with an empty conversation. Does nothing while a task is running (the floating window can reopen the app mid-task). */
+    fun clearHistory() {}
+
     /** 有任务在澄清或执行 */
     val busy: StateFlow<Boolean>
 
