@@ -117,4 +117,4 @@ Amazon 停在提交订单页后，虚拟屏和前台服务保留着等用户点�
 
 ## 22. Floating window and pacing (2026-10-26)
 - Tapping the floating live window (title or picture) now opens the app straight into the full-screen watch page; the window hides itself while that page is open.
-- Demo pacing: before each tap / paste the target is marked on the live view with a red ring for ~0.5 s, then the action runs, then a 0.9 s pause (`AgentPhoneController.BEFORE_ACTION_MS` / `AFTER_ACTION_MS`); live frames are pushed every 450 ms. Tasks take a little longer as a result. Scroll and drag gestures are not marked.
+- Demo pacing: before each tap / paste the target is marked on the live view with a red ring for ~0.5 s, then the action runs, then a 0.9 s pause (`AgentPhoneController.BEFORE_ACTION_MS` / `AFTER_ACTION_MS`); live frames are captured at up to 15 fps while a task runs and pushed to the floating window every 100 ms at 540 px width (the window is 144x320 dp, the screen's 9:20 ratio, so nothing is cropped or stretched). Tasks take a little longer as a result. Scroll and drag gestures are not marked.

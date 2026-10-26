@@ -166,6 +166,7 @@ object Agent {
         stopReader()
         preview = null
         lastFull = null
+        previewFps = 1   // back to the idle rate
         displayId = -1
         appContext.stopService(Intent(appContext, AgentService::class.java))
         cancelled = false
@@ -221,7 +222,8 @@ object Agent {
      */
     suspend fun ensureReady(): Int {
         keepFull = true
-        if (previewFps < 5) previewFps = 5   // 感知要拿刚稳定下来的那一帧
+        // Perception needs the frame that has just settled, and the live window needs smooth frames: capture at up to 15 fps while a task runs
+        if (previewFps < LIVE_FPS) previewFps = LIVE_FPS
         if (priv == null) {
             connect()
             repeat(50) { if (priv == null) kotlinx.coroutines.delay(300) }
@@ -311,6 +313,7 @@ object Agent {
     fun globalBack() = call("GLOBAL_BACK") { report("GLOBAL_ACTION_BACK ${if (it.globalBack()) "已执行" else "失败"}") }
 
     // 画面采集频率：默认 1 fps（非全屏，仅供观察）；全屏观看时调高。可用 debug 广播 config 修改
+    private const val LIVE_FPS = 15
     @Volatile var previewFps = 1
     @Volatile var keepFull = false          // debug：保留最近一帧的全分辨率位图，供 shot 保存
     @Volatile private var lastFull: Bitmap? = null
@@ -342,7 +345,7 @@ object Agent {
             val rowPixels = plane.rowStride / plane.pixelStride
             val full = Bitmap.createBitmap(rowPixels, img.height, Bitmap.Config.ARGB_8888)
             full.copyPixelsFromBuffer(plane.buffer)
-            val cropped = Bitmap.createBitmap(full, 0, 0, img.width, img.height)
+            val cropped = if (rowPixels == img.width) full else Bitmap.createBitmap(full, 0, 0, img.width, img.height)   // skip a 10 MB copy when there is no row padding
             if (keepFull) lastFull = cropped
             val small = Bitmap.createScaledBitmap(cropped, 540, 1200, true)
             if (cropped !== full) full.recycle()

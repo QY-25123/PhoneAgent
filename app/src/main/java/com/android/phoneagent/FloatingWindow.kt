@@ -102,7 +102,7 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
             }
             val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; addView(title); addView(close) }
             val img = ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
+                scaleType = ImageView.ScaleType.FIT_XY   // the view has the screen's 9:20 ratio, so nothing is cropped or stretched
                 setOnClickListener { Log.i("PA", "OVERLAY_CLICK"); onOpen() }
                 setBackgroundColor(0xFF22303F.toInt())
                 clipToOutline = true
@@ -121,9 +121,9 @@ class FloatingWindow(context: Context, private val onOpen: () -> Unit) {
                 setPadding(px(10), px(8), px(10), px(10))
                 background = GradientDrawable().apply { setColor(0xF2F2F7FC.toInt()); cornerRadius = px(18).toFloat(); setStroke(px(1), 0x33000000) }
                 elevation = px(8).toFloat()
-                addView(head, LinearLayout.LayoutParams(px(168), LinearLayout.LayoutParams.WRAP_CONTENT))
-                addView(img, LinearLayout.LayoutParams(px(168), px(300)).apply { topMargin = px(6); bottomMargin = px(8) })
-                addView(stop, LinearLayout.LayoutParams(px(168), LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(head, LinearLayout.LayoutParams(px(144), LinearLayout.LayoutParams.WRAP_CONTENT))
+                addView(img, LinearLayout.LayoutParams(px(144), px(320)).apply { topMargin = px(6); bottomMargin = px(8) })
+                addView(stop, LinearLayout.LayoutParams(px(144), LinearLayout.LayoutParams.WRAP_CONTENT))
             }
             liveImage = img; liveRoot = r
             wm.addView(r, liveLp)

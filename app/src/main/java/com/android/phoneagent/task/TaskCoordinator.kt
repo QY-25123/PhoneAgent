@@ -72,7 +72,7 @@ class TaskCoordinator(
     private val clock: () -> ZonedDateTime = { ZonedDateTime.now() },
     private val cfg: LoopConfig = LoopConfig(),
     /** 执行期间推虚拟屏小图的间隔；0 表示不推（单元测试里用，否则虚拟时间永远推不完） */
-    private val frameIntervalMs: Long = 450,
+    private val frameIntervalMs: Long = 100,
 ) : TaskBackend {
     private val _events = MutableSharedFlow<TaskEvent>(extraBufferCapacity = 256)
     override val events: SharedFlow<TaskEvent> = _events
@@ -350,7 +350,7 @@ class TaskCoordinator(
     private fun startFrames(): Job = scope.launch {
         while (frameIntervalMs > 0) {
             kotlinx.coroutines.delay(frameIntervalMs)
-            env.thumbnail(THUMB_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
+            env.thumbnail(FRAME_W)?.let { _events.tryEmit(TaskEvent.Frame(it)) }
         }
     }
 
@@ -431,6 +431,7 @@ class TaskCoordinator(
         const val MAX_CLARIFY_ROUNDS = 6
         private val CALENDAR_HINT = Regex("日历|事项|提醒|会议|开会|约|预约|日程|邮件|邮箱|微信|wechat|地图|路线|多久|导航|maps|发给|购物|亚马逊|amazon|购买|买|结算|mail|email|calendar|schedule|remind|meeting|event", RegexOption.IGNORE_CASE)
         private const val THUMB_W = 360
+        private const val FRAME_W = 540   // live frames for the floating window / full-screen watch: sharper than the step thumbnails
         private const val EVIDENCE_W = 540
     }
 }
