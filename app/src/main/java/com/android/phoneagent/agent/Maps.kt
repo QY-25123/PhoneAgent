@@ -156,6 +156,10 @@ class MapsFlow(
             if (r is LoopResult.Failure) note = "没能把出发时间设成「${task.departure}」，下面是现在出发的结果"
         }
         var screen = phone.perceive()
+        // Right after a cold start the route page can be open while the durations are still being computed: give it a moment
+        repeat(2) {
+            if (MapsReader.isRoutePage(screen.state) && MapsReader.durationTexts(screen.state).isEmpty()) { sleep(3000); screen = phone.perceive() }
+        }
         if (!MapsReader.isRoutePage(screen.state)) return MapsResult.Failed("没能打开路线页", MapsOpenTask(task).leftovers)
         val durations = MapsReader.durationTexts(screen.state)
         val rows = ArrayList<RouteRow>()
