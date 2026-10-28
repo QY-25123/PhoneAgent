@@ -53,6 +53,9 @@ interface TaskBackend {
     /** A fresh launch of the app starts with an empty conversation. Does nothing while a task is running (the floating window can reopen the app mid-task). */
     fun clearHistory() {}
 
+    /** What the user asked for in the last task (their first message plus the answers to follow-up questions), so "retry" can run it again even after the screen was recreated. */
+    fun lastTask(): String? = null
+
     /** 有任务在澄清或执行 */
     val busy: StateFlow<Boolean>
 

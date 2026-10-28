@@ -125,8 +125,8 @@ class ChatController(private val stepMs: Long = 2500, private val backend: TaskB
 
     /** 失败卡片上的「重试」：从头再来一次（PRD FR-CON-5）。 */
     fun retry() {
-        val t = lastTask
-        if (backend == null || t == null) return submit("重试")
+        val t = backend?.lastTask() ?: lastTask
+        if (backend == null || t == null) { add(ChatItem.Agent(id(), "再说一次想让我做什么吧。")); return }
         add(ChatItem.Agent(id(), "重试中。"))
         backend.submit(t)
     }

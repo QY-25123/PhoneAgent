@@ -87,6 +87,9 @@ class TaskCoordinator(
     private val lock = Any()
     private val history = ArrayList<TaskEvent>()
     override fun history(): List<TaskEvent> = synchronized(history) { history.toList() }
+    @Volatile private var lastTaskText: String? = null
+    override fun lastTask(): String? = lastTaskText
+
     override fun clearHistory() {
         if (_busy.value) return
         // A previous task that ended in a hand-off keeps its virtual display waiting for the "go finish" tap: a fresh launch drops that too
@@ -188,7 +191,9 @@ class TaskCoordinator(
             val dialog = arrayListOf(DialogTurn(true, first))
             var rounds = 0
             while (true) {
-                when (val o = clarifier.clarify(dialog)) {
+                val outcome = clarifier.clarify(dialog)
+                if (outcome !is ClarifyOutcome.Reply && outcome !is ClarifyOutcome.Failed) lastTaskText = dialog.filter { it.fromUser }.joinToString("，") { it.text }
+                when (val o = outcome) {
                     is ClarifyOutcome.Failed -> { emit(TaskEvent.AgentSaid("出错了：${o.reason}")); return }
                     is ClarifyOutcome.Reply -> { emit(TaskEvent.AgentSaid(o.text)); return }
                     is ClarifyOutcome.Ask -> {
